@@ -644,6 +644,9 @@ function setupForUser(){
     document.querySelector('[data-page="admin"]').style.display='none';
     if(currentUser.key==='t2')document.querySelector('[data-page="avaliacao"]').style.display='none';
   }
+  // Set default group based on profile
+  const defaultGrupo = currentUser.key==='t1' ? 'Sub9+Sub11' : 'Sub13+Sub15';
+  Object.keys(currentGrupo).forEach(k => currentGrupo[k] = defaultGrupo);
 }
 
 // ═══ NAV ═══
