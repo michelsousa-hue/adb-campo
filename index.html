@@ -820,7 +820,7 @@ function renderFicha(){
     return{mes:MESES[mi],...c};
   });
   const maxT=Math.max(...monthly.map(d=>d.total),1);
-  const bW=38,bG=12,cH=110;
+  const bW=24,bG=8,cH=100;
   const bars=monthly.map((d,i)=>{
     const x=i*(bW+bG),hT=d.total/maxT*cH;
     let y=cH,segs='';
