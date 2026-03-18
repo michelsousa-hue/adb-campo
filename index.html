@@ -820,7 +820,7 @@ function renderFicha(){
     return{mes:MESES[mi],...c};
   });
   const maxT=Math.max(...monthly.map(d=>d.total),1);
-  const bW=24,bG=8,cH=100;
+  const bW=16,bG=6,cH=90;
   const bars=monthly.map((d,i)=>{
     const x=i*(bW+bG),hT=d.total/maxT*cH;
     let y=cH,segs='';
@@ -878,6 +878,37 @@ function renderFicha(){
         <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:#DC2626"></div>FSA</div>
         <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:#7C3AED"></div>Lesão/Doença</div>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Comparação com o grupo e mínimo exigido</div>
+      ${(()=>{
+        const jogs2=jogsDoGrupo(g);
+        const sorted=[...jogs2].map(x=>{const s2=statsJogador(x,sess);return{nome:x.nome.split(' ')[0],taxa:s2.taxa,isMe:x.id===j.id};}).sort((a,b)=>b.taxa-a.taxa);
+        const barH=18,gap=5,cW=300,labelW=90,metaX=Math.round(META/100*cW);
+        const totalH=sorted.length*(barH+gap)+40;
+        const bars=sorted.map((d,i)=>{
+          const y=i*(barH+gap);
+          const w=Math.round(d.taxa/100*cW);
+          const color=d.isMe?(d.taxa>=META?'#059669':d.taxa>=60?'#D97706':'#DC2626'):'#D1D5DB';
+          const txtColor=d.isMe?'#111827':'#6B7280';
+          const fw=d.isMe?'700':'400';
+          return`<g>
+            <text x="${labelW-6}" y="${y+barH-4}" text-anchor="end" font-size="11" fill="${txtColor}" font-weight="${fw}">${d.nome}</text>
+            <rect x="${labelW}" y="${y}" width="${w}" height="${barH}" fill="${color}" rx="3"/>
+            <text x="${labelW+w+4}" y="${y+barH-4}" font-size="11" fill="${txtColor}" font-weight="${fw}">${d.taxa}%</text>
+          </g>`;
+        }).join('');
+        const avgTaxa=Math.round(sorted.reduce((a,x)=>a+x.taxa,0)/sorted.length);
+        return`<svg viewBox="0 0 ${labelW+cW+50} ${totalH}" width="100%">
+          ${bars}
+          <!-- Meta line -->
+          <line x1="${labelW+metaX}" y1="0" x2="${labelW+metaX}" y2="${totalH-30}" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,3"/>
+          <text x="${labelW+metaX+3}" y="${totalH-18}" font-size="10" fill="#DC2626">Meta ${META}%</text>
+          <!-- Avg line -->
+          <line x1="${labelW+Math.round(avgTaxa/100*cW)}" y1="0" x2="${labelW+Math.round(avgTaxa/100*cW)}" y2="${totalH-30}" stroke="#6B7280" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="${labelW+Math.round(avgTaxa/100*cW)+3}" y="${totalH-8}" font-size="10" fill="#6B7280">Média ${avgTaxa}%</text>
+        </svg>`;
+      })()}
     </div>
     <div class="card">
       <div class="card-title">Histórico completo</div>
