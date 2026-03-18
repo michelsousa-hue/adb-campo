@@ -795,15 +795,102 @@ function renderFicha(){
   const ini=j.nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   const tc=st.taxa>=META?'#059669':st.taxa>=60?'#D97706':'#DC2626';
   const aval=j.aval||0,stars='★'.repeat(Math.round(aval))+'☆'.repeat(5-Math.round(aval));
-  const hist=[...sess].sort((a,b)=>b.data.localeCompare(a.data)).slice(0,24);
+  const total=st.P+st.FCA+st.FSA+st.L||1;
+  // Donut SVG
+  function donutSlice(pct,offset,color){
+    if(pct<=0)return'';
+    const r=55,cx=75,cy=75,circ=2*Math.PI*r;
+    const dash=pct*circ,gap=circ-dash,off=offset*circ;
+    return`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="20" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+  }
+  const pP=st.P/total,pFCA=st.FCA/total,pFSA=st.FSA/total,pL=st.L/total;
+  const donutSVG=`<svg viewBox="0 0 150 150" width="150" height="150">
+    ${donutSlice(pP,0,'#1D9E75')}${donutSlice(pFCA,pP,'#EF9F27')}${donutSlice(pFSA,pP+pFCA,'#DC2626')}${donutSlice(pL,pP+pFCA+pFSA,'#7C3AED')}
+    <text x="75" y="70" text-anchor="middle" font-size="22" font-weight="700" fill="${tc}">${st.taxa}%</text>
+    <text x="75" y="87" text-anchor="middle" font-size="11" fill="#6B7280">presença</text>
+  </svg>`;
+  // Monthly bars
+  const MESES=['Out','Nov','Dez','Jan','Fev','Mar'];
+  const MESES_NUM=[10,11,12,1,2,3];
+  const monthly=MESES_NUM.map((m,mi)=>{
+    const year=m>=10?2024:2025;
+    const sm=sess.filter(s=>{const[y,mo]=s.data.split('-');return parseInt(mo)===m&&parseInt(y)===year;});
+    const c={total:sm.length,P:0,FCA:0,FSA:0,L:0};
+    sm.forEach(s=>{const v=(DB.presencas[s.id]||{})[j.id];if(v&&c[v]!==undefined)c[v]++;});
+    return{mes:MESES[mi],...c};
+  });
+  const maxT=Math.max(...monthly.map(d=>d.total),1);
+  const bW=38,bG=12,cH=110;
+  const bars=monthly.map((d,i)=>{
+    const x=i*(bW+bG),hT=d.total/maxT*cH;
+    let y=cH,segs='';
+    [{v:d.P,c:'#1D9E75'},{v:d.FCA,c:'#EF9F27'},{v:d.FSA,c:'#DC2626'},{v:d.L,c:'#7C3AED'}].forEach(({v,c})=>{
+      if(v>0){const h=v/maxT*cH;y-=h;segs+=`<rect x="${x}" y="${y.toFixed(1)}" width="${bW}" height="${h.toFixed(1)}" fill="${c}" rx="2"/>`;}
+    });
+    return`<rect x="${x}" y="${(cH-hT).toFixed(1)}" width="${bW}" height="${hT.toFixed(1)}" fill="#F3F4F6" rx="2"/>
+      ${segs}
+      <text x="${x+bW/2}" y="${cH+14}" text-anchor="middle" font-size="10" fill="#6B7280">${d.mes}</text>
+      ${d.total>0?`<text x="${x+bW/2}" y="${(cH-hT-4).toFixed(1)}" text-anchor="middle" font-size="9" fill="#374151">${d.P}/${d.total}</text>`:''}`;
+  }).join('');
+  const cW=(bW+bG)*6;
+  const monthSVG=`<svg viewBox="0 0 ${cW} ${cH+24}" width="100%"><line x1="0" y1="${cH}" x2="${cW}" y2="${cH}" stroke="#E5E7EB" stroke-width="1"/>${bars}</svg>`;
+
   div.innerHTML=`
-    <div class="card"><div class="ficha-header"><div class="ficha-avatar">${ini}</div><div style="flex:1"><div style="font-size:16px;font-weight:600">${j.nome}</div><div style="font-size:12px;color:var(--gray-500)">${j.sub} · #${j.num} · ${j.pos}</div><div style="color:#D97706;font-size:16px;margin-top:3px">${stars}</div></div><div style="text-align:right"><div style="font-size:24px;font-weight:700;color:${tc}">${st.taxa}%</div><div style="font-size:11px;color:var(--gray-500)">meta ${META}%</div></div></div>
-    <div class="metrics-grid"><div class="metric-card"><div class="metric-label">Presenças</div><div class="metric-value">${st.P}</div><div class="metric-sub">de ${st.total}</div></div><div class="metric-card"><div class="metric-label">Média grupo</div><div class="metric-value">${mediaG}%</div></div><div class="metric-card"><div class="metric-label">Avaliação</div><div class="metric-value">${aval.toFixed(1)}</div><div class="metric-sub">/ 5.0</div></div><div class="metric-card"><div class="metric-label">FSA</div><div class="metric-value ${st.FSA>=3?'metric-danger':''}">${st.FSA}</div></div></div>
-    <div class="prog-wrap"><div class="prog-fill" style="width:${st.taxa}%;background:${tc}"></div></div></div>
-    <div class="card-2col"><div class="card"><div class="card-title">Faltas</div><table class="tbl"><tbody><tr><td><span class="badge badge-fca">FCA</span></td><td>${st.FCA}</td></tr><tr><td><span class="badge badge-fsa">FSA</span></td><td>${st.FSA}</td></tr><tr><td><span class="badge badge-l">L</span></td><td>${st.L}</td></tr></tbody></table></div>
-    <div class="card"><div class="card-title">Informação</div><table class="tbl"><tbody><tr><td style="color:var(--gray-500)">Nascimento</td><td>${fmtDate(j.nasc)}</td></tr><tr><td style="color:var(--gray-500)">Contacto</td><td>${j.cont||'—'}</td></tr><tr><td style="color:var(--gray-500)">Obs.</td><td>${j.obs||'—'}</td></tr></tbody></table></div></div>
-    <div class="card"><div class="card-title">Histórico</div><div style="display:flex;flex-wrap:wrap;gap:6px">${hist.map(s=>{const v=(DB.presencas[s.id]||{})[j.id]||'—';const bc=v==='P'?'badge-p':v==='FCA'?'badge-fca':v==='FSA'?'badge-fsa':v==='L'?'badge-l':'badge-gray';return`<div style="text-align:center"><div style="font-size:9px;color:var(--gray-400);margin-bottom:2px">${fmtDateS(s.data)}</div><span class="badge ${bc}">${v}</span></div>`;}).join('')}</div></div>`;
+    <div class="card">
+      <div class="ficha-header">
+        <div class="ficha-avatar">${ini}</div>
+        <div style="flex:1"><div style="font-size:16px;font-weight:600">${j.nome}</div><div style="font-size:12px;color:var(--gray-500)">${j.sub} · #${j.num} · ${j.pos}</div><div style="color:#D97706;font-size:16px;margin-top:3px">${stars}</div></div>
+        <div style="text-align:right"><div style="font-size:24px;font-weight:700;color:${tc}">${st.taxa}%</div><div style="font-size:11px;color:var(--gray-500)">meta ${META}%</div></div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">Presenças</div><div class="metric-value">${st.P}</div><div class="metric-sub">de ${st.total}</div></div>
+        <div class="metric-card"><div class="metric-label">Média grupo</div><div class="metric-value">${mediaG}%</div></div>
+        <div class="metric-card"><div class="metric-label">Avaliação</div><div class="metric-value">${aval.toFixed(1)}</div><div class="metric-sub">/ 5.0</div></div>
+        <div class="metric-card"><div class="metric-label">FSA</div><div class="metric-value ${st.FSA>=3?'metric-danger':''}">${st.FSA}</div><div class="metric-sub">faltas s/ aviso</div></div>
+      </div>
+    </div>
+    <div class="card-2col">
+      <div class="card">
+        <div class="card-title">Distribuição de presenças</div>
+        <div style="display:flex;justify-content:center;margin-bottom:10px">${donutSVG}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:11px">
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:#1D9E75;flex-shrink:0"></div>Presente: <strong>${st.P}</strong> (${Math.round(pP*100)}%)</div>
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:#EF9F27;flex-shrink:0"></div>FCA: <strong>${st.FCA}</strong> (${Math.round(pFCA*100)}%)</div>
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:#DC2626;flex-shrink:0"></div>FSA: <strong>${st.FSA}</strong> (${Math.round(pFSA*100)}%)</div>
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:#7C3AED;flex-shrink:0"></div>Lesão: <strong>${st.L}</strong> (${Math.round(pL*100)}%)</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Informação</div>
+        <table class="tbl"><tbody>
+          <tr><td style="color:var(--gray-500)">Nascimento</td><td>${fmtDate(j.nasc)}</td></tr>
+          <tr><td style="color:var(--gray-500)">Contacto EE</td><td>${j.cont||'—'}</td></tr>
+          <tr><td style="color:var(--gray-500)">Obs.</td><td>${j.obs||'—'}</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Evolução mensal — presenças por mês</div>
+      <div style="overflow-x:auto">${monthSVG}</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px">
+        <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:#1D9E75"></div>Presente</div>
+        <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:#EF9F27"></div>FCA</div>
+        <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:#DC2626"></div>FSA</div>
+        <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:#7C3AED"></div>Lesão/Doença</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Histórico completo</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${[...sess].sort((a,b)=>a.data.localeCompare(b.data)).map(s=>{
+          const v=(DB.presencas[s.id]||{})[j.id]||'—';
+          const bc=v==='P'?'badge-p':v==='FCA'?'badge-fca':v==='FSA'?'badge-fsa':v==='L'?'badge-l':'badge-gray';
+          return`<div style="text-align:center"><div style="font-size:9px;color:var(--gray-400);margin-bottom:2px">${fmtDateS(s.data)}</div><span class="badge ${bc}">${v}</span></div>`;
+        }).join('')}
+      </div>
+    </div>`;
 }
+
 
 // ═══ AVALIAÇÃO ═══
 function setAvalView(v,el){
