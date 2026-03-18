@@ -512,22 +512,29 @@ function showLoading(v){
 async function loadAllData(){
   showLoading(true);
   try {
-    const [jogsR, sessR, presR, avalR, cfgR] = await Promise.all([
+    const [jogsR, sessR, avalR, cfgR] = await Promise.all([
       sb.from('jogadores').select('*').order('nome'),
       sb.from('sessoes').select('*').order('data',{ascending:false}),
-      sb.from('presencas').select('*'),
       sb.from('avaliacoes').select('*'),
       sb.from('config').select('*'),
     ]);
     DB.jogadores = jogsR.data || [];
     DB.sessoes = sessR.data || [];
     DB.avaliacoes = avalR.data || [];
-    // Build presencas map
+    // Load all presencas with pagination
     DB.presencas = {};
-    (presR.data||[]).forEach(p=>{
-      if(!DB.presencas[p.sessao_id]) DB.presencas[p.sessao_id]={};
-      DB.presencas[p.sessao_id][p.jogador_id]=p.estado;
-    });
+    let presPage = 0;
+    const presPageSize = 1000;
+    while(true) {
+      const presR = await sb.from('presencas').select('*').range(presPage * presPageSize, (presPage+1) * presPageSize - 1);
+      const rows = presR.data || [];
+      rows.forEach(p=>{
+        if(!DB.presencas[p.sessao_id]) DB.presencas[p.sessao_id]={};
+        DB.presencas[p.sessao_id][p.jogador_id]=p.estado;
+      });
+      if(rows.length < presPageSize) break;
+      presPage++;
+    }
     // Config
     (cfgR.data||[]).forEach(c=>{
       if(c.key==='pins') DB.config.pins=JSON.parse(c.value);
