@@ -1101,6 +1101,15 @@ function renderFicha(){
           return`<div style="text-align:center"><div style="font-size:9px;color:var(--gray-400);margin-bottom:2px">${fmtDateS(s.data)}</div><span class="badge ${bc}">${v}</span></div>`;
         }).join('')}
       </div>
+    </div>
+    <div class="card" id="card-relatorio-ia">
+      <div class="card-title">🤖 Relatório do Treinador (IA)</div>
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Gerado automaticamente com base nos dados do jogador. Podes editar antes de exportar o PDF.</div>
+      <textarea id="relatorio-ia-texto" class="form-input" style="min-height:120px;font-size:13px;line-height:1.6" placeholder="Clica em 'Gerar com IA' para criar o relatório automaticamente..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-primary" onclick="gerarRelatorioIA('${j.id}')" id="btn-gerar-ia">✨ Gerar com IA</button>
+        <button class="btn" onclick="document.getElementById('relatorio-ia-texto').value=''">🗑 Limpar</button>
+      </div>
     </div>`;
 }
 
@@ -1766,9 +1775,59 @@ async function gerarPDFJogador(){
     y+=22;
   }
 
+  // ── RELATÓRIO IA ──
+  const relatorioTexto=(document.getElementById('relatorio-ia-texto')?.value||'').trim();
+  if(relatorioTexto){
+    checkY(30);
+    doc.setDrawColor(...RED);doc.setLineWidth(0.5);doc.line(margin,y,W-margin,y);y+=5;
+    doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(0,0,0);
+    doc.text('Relatorio do Treinador',margin,y);y+=6;
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(55,65,81);
+    const linhas=doc.splitTextToSize(relatorioTexto,cW);
+    linhas.forEach(linha=>{checkY(5);doc.text(linha,margin,y);y+=4.5;});
+    y+=4;
+  }
+
   addFooter();
-  doc.save('Processo_'+j.nome.replace(/ /g,'_')+'_'+(DB.config.epoca||'2024-2025')+'.pdf');
+  doc.save('Processo_'+j.nome.replace(/ /g,'_')+'_'+(DB.config.epoca||'2025-2026')+'.pdf');
   toast('PDF gerado com sucesso!');
+}
+
+// ═══ RELATÓRIO IA ═══
+async function gerarRelatorioIA(jid){
+  const btn=document.getElementById('btn-gerar-ia');
+  const textarea=document.getElementById('relatorio-ia-texto');
+  if(!btn||!textarea)return;
+  btn.disabled=true;btn.textContent='⏳ A gerar...';
+  const j=DB.jogadores.find(x=>x.id===jid);if(!j){btn.disabled=false;btn.textContent='✨ Gerar com IA';return;}
+  const g=['Sub9','Sub11'].includes(j.sub)?'Sub9+Sub11':'Sub13+Sub15';
+  const sess=sessDoGrupo(g),st=statsJogador(j,sess);
+  const mediaG=sess.length&&jogsDoGrupo(g).length?Math.round(jogsDoGrupo(g).reduce((a,x)=>a+statsJogador(x,sess).taxa,0)/jogsDoGrupo(g).length):0;
+  const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&d.nome===j.nome);
+  const pos=DB.avaliacoes.find(d=>d.tipo==='pos'&&d.nome===j.nome);
+  const forcas=pre?COMPS.filter((_,i)=>pre.vals[i]>=4).map(c=>c.label).join(', ')||'Nenhuma':'N/A';
+  const fraquezas=pre?COMPS.filter((_,i)=>pre.vals[i]<=2).map(c=>c.label).join(', ')||'Nenhuma':'N/A';
+  const avalInfo=pre
+    ?`Avaliação técnica pré-teste: média ${avg(pre.vals).toFixed(2)}/5.0 — Patinagem: ${avg(pre.vals.slice(0,12)).toFixed(2)}, Remate: ${avg(pre.vals.slice(12,16)).toFixed(2)}, Técnica de bola: ${avg(pre.vals.slice(16)).toFixed(2)}. ${pos?`Pós-teste: média ${avg(pos.vals).toFixed(2)}/5.0 (evolução ${(avg(pos.vals)-avg(pre.vals))>=0?'+':''}${(avg(pos.vals)-avg(pre.vals)).toFixed(2)}).`:'Pós-teste ainda não realizado.'} Forças: ${forcas}. Fraquezas: ${fraquezas}.`
+    :'Sem avaliação técnica registada.';
+  const prompt=`És um treinador de hóquei em patins a escrever um relatório de avaliação sobre um jogador para os encarregados de educação.
+Escreve exatamente um parágrafo em português de Portugal (3 a 5 frases), com tom profissional mas acessível.
+Refere pontos fortes, áreas a melhorar e uma recomendação para a próxima época.
+Escreve apenas texto corrido, sem bullet points, sem títulos, sem introduções como "O jogador...".
+Começa diretamente com o nome do jogador.
+
+Dados:
+- Nome: ${j.nome} | Escalão: ${j.sub} | Posição: ${j.pos}
+- Presenças: ${st.P}/${st.total} (${st.taxa}%) | Média do grupo: ${mediaG}%
+- Faltas c/ aviso: ${st.FCA} | Faltas s/ aviso: ${st.FSA} | Lesões: ${st.L}
+- ${avalInfo}`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const texto=(data.content||[]).map(x=>x.text||'').join('').trim();
+    if(texto){textarea.value=texto;}else{textarea.value='Erro ao gerar relatório. Tenta novamente.';}
+  }catch(e){textarea.value='Erro de ligação. Tenta novamente.';}
+  btn.disabled=false;btn.textContent='✨ Gerar com IA';
 }
 
 // ═══ INIT ═══
