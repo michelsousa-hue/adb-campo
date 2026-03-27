@@ -459,6 +459,43 @@ textarea.form-input{resize:vertical;min-height:70px}
     <button class="btn btn-primary" style="width:100%" onclick="confirmarEvento()">Confirmar</button>
   </div>
 </div>
+<div id="modal-edit-sessao" class="modal-bg" style="display:none">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">✏️ Editar Sessão</span><button class="modal-close" onclick="fecharEditSessao()">✕</button></div>
+    <input type="hidden" id="edit-ses-id">
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label">Data</label>
+      <input type="date" class="form-input" id="edit-ses-data">
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label">Hora</label>
+      <input type="time" class="form-input" id="edit-ses-hora">
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label">Tipo</label>
+      <select class="form-input" id="edit-ses-tipo">
+        <option value="treino">Treino</option>
+        <option value="jogo">Jogo</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label">Grupo</label>
+      <select class="form-input" id="edit-ses-grupo">
+        <option value="Sub9+Sub11">Sub9+Sub11</option>
+        <option value="Sub13+Sub15">Sub13+Sub15</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Descrição</label>
+      <input type="text" class="form-input" id="edit-ses-desc" placeholder="Opcional">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="flex:1" onclick="fecharEditSessao()">Cancelar</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveEditSessao()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-pin" class="modal-bg">
   <div class="modal">
     <div class="modal-header"><span class="modal-title" id="modal-pin-title">Alterar PIN</span><button class="modal-close" onclick="closeModal('modal-pin')">✕</button></div>
@@ -931,8 +968,37 @@ function renderSessoes(){
   const g=currentGrupo.sessoes,sess=sessDoGrupo(g).sort((a,b)=>b.data.localeCompare(a.data)),jogs=jogsDoGrupo(g);
   document.getElementById('ses-tbody').innerHTML=sess.length?sess.map(s=>{
     const pr=DB.presencas[s.id]||{},np=Object.values(pr).filter(v=>v==='P'||(v&&typeof v==='object'&&v.estado==='P')).length,reg=Object.keys(pr).length>0;
-    return`<tr><td>${fmtDate(s.data)}</td><td>${s.hora}</td><td><span class="badge ${s.tipo==='jogo'?'badge-info':'badge-gray'}">${s.tipo==='jogo'?'Jogo':'Treino'}</span></td><td>${s.grupo}</td><td>${s.descricao||'—'}</td><td>${reg?np+'/'+jogs.length:'—'}</td><td><span class="badge ${reg?'badge-ok':'badge-warn'}">${reg?'Registado':'Pendente'}</span></td><td><button class="btn btn-sm" onclick="removeSes('${s.id}')">×</button></td></tr>`;
+    return`<tr><td>${fmtDate(s.data)}</td><td>${s.hora}</td><td><span class="badge ${s.tipo==='jogo'?'badge-info':'badge-gray'}">${s.tipo==='jogo'?'Jogo':'Treino'}</span></td><td>${s.grupo}</td><td>${s.descricao||'—'}</td><td>${reg?np+'/'+jogs.length:'—'}</td><td><span class="badge ${reg?'badge-ok':'badge-warn'}">${reg?'Registado':'Pendente'}</span></td><td style="display:flex;gap:4px"><button class="btn btn-sm" title="Editar" onclick="abrirEditSessao('${s.id}')">✏️</button><button class="btn btn-sm" onclick="removeSes('${s.id}')">×</button></td></tr>`;
   }).join(''):'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--gray-400)">Sem sessões</td></tr>';
+}
+function abrirEditSessao(id){
+  const s=DB.sessoes.find(x=>x.id===id);if(!s)return;
+  document.getElementById('edit-ses-id').value=id;
+  document.getElementById('edit-ses-data').value=s.data;
+  document.getElementById('edit-ses-hora').value=s.hora||'18:00';
+  document.getElementById('edit-ses-tipo').value=s.tipo||'treino';
+  document.getElementById('edit-ses-grupo').value=s.grupo||'Sub9+Sub11';
+  document.getElementById('edit-ses-desc').value=s.descricao||'';
+  document.getElementById('modal-edit-sessao').style.display='flex';
+}
+function fecharEditSessao(){
+  document.getElementById('modal-edit-sessao').style.display='none';
+}
+async function saveEditSessao(){
+  const id=document.getElementById('edit-ses-id').value;
+  const data=document.getElementById('edit-ses-data').value;
+  const hora=document.getElementById('edit-ses-hora').value;
+  const tipo=document.getElementById('edit-ses-tipo').value;
+  const grupo=document.getElementById('edit-ses-grupo').value;
+  const descricao=document.getElementById('edit-ses-desc').value;
+  if(!data){toast('Data obrigatória!');return;}
+  const {error}=await sb.from('sessoes').update({data,hora,tipo,grupo,descricao}).eq('id',id);
+  if(error){toast('Erro ao guardar: '+error.message);return;}
+  const s=DB.sessoes.find(x=>x.id===id);
+  if(s){s.data=data;s.hora=hora;s.tipo=tipo;s.grupo=grupo;s.descricao=descricao;}
+  fecharEditSessao();
+  renderPage(currentPage);
+  toast('Sessão atualizada!');showSync();
 }
 async function removeSes(id){
   if(!confirm('Remover sessão?'))return;
@@ -1822,7 +1888,7 @@ Dados:
 - Faltas c/ aviso: ${st.FCA} | Faltas s/ aviso: ${st.FSA} | Lesões: ${st.L}
 - ${avalInfo}`;
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     const texto=(data.content||[]).map(x=>x.text||'').join('').trim();
     if(texto){textarea.value=texto;}else{textarea.value='Erro ao gerar relatório. Tenta novamente.';}
