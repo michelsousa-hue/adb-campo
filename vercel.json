@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/relatorio.js": {
+      "runtime": "edge"
+    }
+  }
+}
