@@ -1513,22 +1513,22 @@ async function gerarPDFConvocatoria(){try{
   let y=0;
 
   // ── Header band ──
-  doc.setFillColor(...RED);doc.rect(0,0,W,28,'F');
-  // Logo
-  try{doc.addImage(LOGO_B64,'JPEG',margin,4,20,20);}catch(e){}
-  // Title
+  doc.setFillColor(...RED);doc.rect(0,0,W,22,'F');
   doc.setTextColor(...WHITE);
   doc.setFontSize(16);doc.setFont('helvetica','bold');
-  doc.text('ADB CAMPO',margin+24,13);
+  doc.text('ADB CAMPO',W/2,11,{align:'center'});
   doc.setFontSize(8);doc.setFont('helvetica','normal');
-  doc.text('Associação Desportiva de Barcelos — Hóquei em Patins',margin+24,19);
-  // Escalão badge
-  doc.setFillColor(...GOLD);doc.roundedRect(W-margin-40,5,40,18,3,3,'F');
-  doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...WHITE);
-  doc.text('CONVOCATÓRIA',W-margin-20,13,{align:'center'});
-  doc.setFontSize(8);doc.setFont('helvetica','normal');
-  doc.text(g,W-margin-20,20,{align:'center'});
-  y=34;
+  doc.text('Associação Desportiva de Barcelos — Hóquei em Patins',W/2,17,{align:'center'});
+  y=22;
+
+  // ── Logo + título central ──
+  const logoH=22;
+  try{doc.addImage(LOGO_B64,'JPEG',W/2-30,y+2,18,18);}catch(e){}
+  doc.setFontSize(15);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
+  doc.text('CONVOCATÓRIA',W/2-9,y+10,{align:'left'});
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+  doc.text(g,W/2-9,y+17,{align:'left'});
+  y+=logoH+6;
 
   // ── Info block ──
   doc.setFillColor(...LGRAY);doc.roundedRect(margin,y,cW,24,3,3,'F');
