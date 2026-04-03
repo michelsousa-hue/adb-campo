@@ -1497,11 +1497,11 @@ function gerarConv(){
 }
 
 // ═══ PDF CONVOCATÓRIA ═══
-async function gerarPDFConvocatoria(){
+async function gerarPDFConvocatoria(){try{
   const data=document.getElementById('conv-data').value;
   const hora=document.getElementById('conv-hora').value;
-  const adv=document.getElementById('conv-adv').value;
-  const local=document.getElementById('conv-local').value;
+  const adv=document.getElementById('conv-adv').value||'';
+  const local=document.getElementById('conv-local').value||'';
   const g=currentGrupo.convocatoria;
   const sess=sessDoGrupo(g);
   const jogs=DB.jogadores.filter(j=>convSel.includes(j.id));
@@ -1569,7 +1569,7 @@ async function gerarPDFConvocatoria(){
     const st=statsJogador(j,sess);
     const even=i%2===0;
     if(even){doc.setFillColor(250,250,250);}else{doc.setFillColor(...WHITE);}
-    doc.rect(margin,y,cW,7,(even?'F':''));
+    if(even){doc.rect(margin,y,cW,7,'F');}
     doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
     doc.text(String(i+1),margin+2,y+5);
     doc.setFont('helvetica','bold');
@@ -1604,9 +1604,14 @@ async function gerarPDFConvocatoria(){
   doc.text('ADB Campo — Hóquei em Patins — Associação Desportiva de Barcelos',margin,291);
   doc.text(`Gerado em ${new Date().toLocaleDateString('pt-PT')}`,W-margin,291,{align:'right'});
 
-  const fileName=`Convocatoria_${g.replace(/\+/g,'_')}_${adv.replace(/ /g,'_')||'Jogo'}_${data||new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(fileName);
-  toast('✅ PDF da convocatória gerado!');
+    const advClean=(adv||'Jogo').replace(/ /g,'_');
+    const fileName=`Convocatoria_${g.replace(/\+/g,'_')}_${advClean}_${data||new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+    toast('✅ PDF da convocatória gerado!');
+  }catch(e){
+    console.error('Erro PDF convocatória:',e);
+    toast('❌ Erro ao gerar PDF: '+e.message);
+  }
 }
 
 // ═══ JOGO AO VIVO ═══
