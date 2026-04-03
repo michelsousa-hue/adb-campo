@@ -330,7 +330,11 @@ textarea.form-input{resize:vertical;min-height:70px}
             <div class="card-title">⚙️ Configurar</div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="conv-data"></div>
-              <div class="form-group"><label class="form-label">Hora</label><input type="time" class="form-input" id="conv-hora" value="15:00"></div>
+              <div class="form-group"><label class="form-label">Hora do jogo</label><input type="time" class="form-input" id="conv-hora" value="15:00" onchange="autoConcentracao()"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Hora de concentração</label><input type="time" class="form-input" id="conv-conc" value="14:00"></div>
+              <div class="form-group" style="display:flex;align-items:flex-end"><span style="font-size:11px;color:var(--gray-400);padding-bottom:8px">⚡ Auto: 1h antes do jogo</span></div>
             </div>
             <div class="form-group" style="margin-bottom:10px"><label class="form-label">Adversário</label><input type="text" class="form-input" id="conv-adv"></div>
             <div class="form-group" style="margin-bottom:14px"><label class="form-label">Local</label><input type="text" class="form-input" id="conv-local"></div>
@@ -1474,6 +1478,15 @@ function renderRelatorio(){
 }
 
 // ═══ CONVOCATÓRIA ═══
+function autoConcentracao(){
+  const h=document.getElementById('conv-hora').value;
+  if(!h)return;
+  const [hh,mm]=h.split(':').map(Number);
+  const total=hh*60+mm-60;
+  const ch=Math.floor(((total%1440)+1440)%1440/60).toString().padStart(2,'0');
+  const cm=(total%60).toString().padStart(2,'0');
+  document.getElementById('conv-conc').value=`${ch}:${cm}`;
+}
 function renderConvocatoria(){
   buildGrupoTabs('conv-gtabs','convocatoria');
   const g=currentGrupo.convocatoria,jogsGrupo=jogsDoGrupo(g);
@@ -1491,15 +1504,16 @@ function renderConvocatoria(){
 }
 function toggleConv(id,v){if(v)convSel.push(id);else convSel=convSel.filter(x=>x!==id);}
 function gerarConv(){
-  const data=document.getElementById('conv-data').value,hora=document.getElementById('conv-hora').value,adv=document.getElementById('conv-adv').value,local=document.getElementById('conv-local').value;
+  const data=document.getElementById('conv-data').value,hora=document.getElementById('conv-hora').value,conc=document.getElementById('conv-conc').value,adv=document.getElementById('conv-adv').value,local=document.getElementById('conv-local').value;
   const g=currentGrupo.convocatoria,jogs=DB.jogadores.filter(j=>convSel.includes(j.id)),sess=sessDoGrupo(g);
-  document.getElementById('conv-preview-wrap').innerHTML=`<div class="conv-preview"><div class="conv-header"><img src="${LOGO_B64}" style="width:52px;height:52px;object-fit:contain;border-radius:4px" alt="ADB Campo"><div style="font-size:16px;font-weight:700;margin-top:4px">ADB CAMPO</div><div style="font-size:12px;color:var(--gray-500)">Associação Desportiva de Barcelos — Hóquei em Patins</div><div style="font-size:13px;font-weight:600;margin-top:8px;color:var(--red)">CONVOCATÓRIA ${g.toUpperCase()}</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px"><div><span style="color:var(--gray-500)">Data:</span> <strong>${fmtDate(data)||'—'}</strong></div><div><span style="color:var(--gray-500)">Hora:</span> <strong>${hora||'—'}</strong></div><div><span style="color:var(--gray-500)">Adversário:</span> <strong>${adv||'—'}</strong></div><div><span style="color:var(--gray-500)">Local:</span> <strong>${local||'—'}</strong></div></div><div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Jogadores convocados (${jogs.length})</div>${jogs.map((j,i)=>{const st=statsJogador(j,sess);return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span>${i+1}. <strong>${j.nome}</strong> <span style="color:var(--gray-400)">#${j.num} (${j.sub})</span></span><span class="badge ${st.taxa>=META?'badge-ok':'badge-warn'}">${st.taxa}%</span></div>`;}).join('')}<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--gray-200);font-size:10px;color:var(--gray-400);text-align:center">Gerado em ${new Date().toLocaleDateString('pt-PT')} · ADB Campo</div></div>`;
+  document.getElementById('conv-preview-wrap').innerHTML=`<div class="conv-preview"><div class="conv-header"><img src="${LOGO_B64}" style="width:52px;height:52px;object-fit:contain;border-radius:4px" alt="ADB Campo"><div style="font-size:16px;font-weight:700;margin-top:4px">ADB CAMPO</div><div style="font-size:12px;color:var(--gray-500)">Associação Desportiva de Barcelos — Hóquei em Patins</div><div style="font-size:13px;font-weight:600;margin-top:8px;color:var(--red)">CONVOCATÓRIA ${g.toUpperCase()}</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px"><div><span style="color:var(--gray-500)">Data:</span> <strong>${fmtDate(data)||'—'}</strong></div><div><span style="color:var(--gray-500)">Hora do jogo:</span> <strong>${hora||'—'}</strong></div><div><span style="color:var(--gray-500)">Concentração:</span> <strong>${conc||'—'}</strong></div><div><span style="color:var(--gray-500)">Adversário:</span> <strong>${adv||'—'}</strong></div><div><span style="color:var(--gray-500)">Local:</span> <strong>${local||'—'}</strong></div></div><div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Jogadores convocados (${jogs.length})</div>${jogs.map((j,i)=>{const st=statsJogador(j,sess);return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span>${i+1}. <strong>${j.nome}</strong> <span style="color:var(--gray-400)">#${j.num} (${j.sub})</span></span><span class="badge ${st.taxa>=META?'badge-ok':'badge-warn'}">${st.taxa}%</span></div>`;}).join('')}<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--gray-200);font-size:10px;color:var(--gray-400);text-align:center">Gerado em ${new Date().toLocaleDateString('pt-PT')} · ADB Campo</div></div>`;
 }
 
 // ═══ PDF CONVOCATÓRIA ═══
 async function gerarPDFConvocatoria(){try{
   const data=document.getElementById('conv-data').value;
   const hora=document.getElementById('conv-hora').value;
+  const conc=document.getElementById('conv-conc').value||'';
   const adv=document.getElementById('conv-adv').value||'';
   const local=document.getElementById('conv-local').value||'';
   const g=currentGrupo.convocatoria;
@@ -1531,21 +1545,24 @@ async function gerarPDFConvocatoria(){try{
   y+=logoH+6;
 
   // ── Info block ──
-  doc.setFillColor(...LGRAY);doc.roundedRect(margin,y,cW,24,3,3,'F');
+  doc.setFillColor(...LGRAY);doc.roundedRect(margin,y,cW,32,3,3,'F');
   doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
   const col2=margin+cW/2;
   doc.text('Data:',margin+4,y+8);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
   doc.text(data?`${data.split('-').reverse().join('/')}`:' — ',margin+18,y+8);
   doc.setFont('helvetica','bold');doc.setTextColor(...RED);
-  doc.text('Hora:',col2,y+8);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
-  doc.text(hora||' — ',col2+14,y+8);
+  doc.text('Hora do jogo:',col2,y+8);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
+  doc.text(hora||' — ',col2+28,y+8);
   doc.setFont('helvetica','bold');doc.setTextColor(...RED);
-  doc.text('Adversário:',margin+4,y+18);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
-  doc.text(adv||' — ',margin+28,y+18);
+  doc.text('Concentração:',margin+4,y+18);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
+  doc.text(conc||' — ',margin+30,y+18);
   doc.setFont('helvetica','bold');doc.setTextColor(...RED);
-  doc.text('Local:',col2,y+18);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
-  doc.text(local||' — ',col2+14,y+18);
-  y+=30;
+  doc.text('Adversário:',col2,y+18);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
+  doc.text(adv||' — ',col2+24,y+18);
+  doc.setFont('helvetica','bold');doc.setTextColor(...RED);
+  doc.text('Local:',margin+4,y+28);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
+  doc.text(local||' — ',margin+18,y+28);
+  y+=38;
 
   // ── Section title ──
   doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
