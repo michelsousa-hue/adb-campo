@@ -1748,14 +1748,21 @@ async function gerarPDFJogo(){
     const g=jogoState.grupo;
     let y=0;
 
-    // Header
+    // Header — igual à convocatória
     doc.setFillColor(...RED);doc.rect(0,0,W,22,'F');
     doc.setTextColor(...WHITE);
     doc.setFontSize(15);doc.setFont('helvetica','bold');
-    doc.text('ADB CAMPO — RELATÓRIO DE JOGO',W/2,10,{align:'center'});
+    doc.text('ADB CAMPO',W/2,10,{align:'center'});
     doc.setFontSize(8);doc.setFont('helvetica','normal');
-    doc.text(g+' · '+new Date().toLocaleDateString('pt-PT'),W/2,17,{align:'center'});
-    y=28;
+    doc.text('Associação Desportiva de Barcelos — Hóquei em Patins',W/2,17,{align:'center'});
+    y=22;
+    // Logo + título abaixo da banda vermelha
+    try{doc.addImage(LOGO_B64,'JPEG',W/2-30,y+2,18,18);}catch(e){}
+    doc.setFontSize(15);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
+    doc.text('RELATÓRIO DE JOGO',W/2-9,y+10,{align:'left'});
+    doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+    doc.text(g+' · '+new Date().toLocaleDateString('pt-PT'),W/2-9,y+17,{align:'left'});
+    y+=28;
 
     // Resultado
     const ppF=jogoState.powerPlays.favor,ppC=jogoState.powerPlays.contra;
