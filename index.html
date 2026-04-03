@@ -399,7 +399,10 @@ textarea.form-input{resize:vertical;min-height:70px}
         </div>
         <div class="card"><div class="card-title">⏱ Tempo de jogo</div><div id="jogo-tempos"></div></div>
         <div class="card">
-          <div class="card-title">📊 Análise do Jogo</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div class="card-title" style="margin:0">📊 Análise do Jogo</div>
+            <button class="btn btn-sm" style="background:#1D9E75;color:white;border-color:#1D9E75" onclick="gerarPDFJogo()">⬇ PDF</button>
+          </div>
           <div id="jogo-analise" style="font-size:13px"></div>
         </div>
       </div>
@@ -1695,19 +1698,183 @@ function renderJogoAoVivo(){
     const golosHtml=golosJogArr.length
       ?golosJogArr.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span><strong>${g.nome}</strong> <span style="color:var(--gray-400);font-size:10px">(${g.mins}' em campo)</span></span><span style="font-weight:700;color:var(--red)">⚽ ×${g.n}</span></div>`).join('')
       :`<div style="font-size:12px;color:var(--gray-400)">Nenhum golo registado com marcador</div>`;
+    // Defesas por GR
+    const defesasArr=Object.entries(jogoState.defesasJog||{}).map(([jid,n])=>{
+      const jg=DB.jogadores.find(x=>x.id===jid);
+      return{nome:jg?jg.nome.split(' ')[0]:'GR',n};
+    }).sort((a,b)=>b.n-a.n);
+    // Eventos de golo detalhados
+    const goloEvs=jogoState.eventos.filter(e=>e.tipo==='golo').map(e=>{
+      const jg=DB.jogadores.find(x=>x.id===e.jid);
+      return`<div class="evento-row"><span class="evento-min">${e.min}'</span><span>⚽</span><span><strong>${jg?jg.nome.split(' ')[0]:'—'}</strong>${e.assist?' <span style="color:var(--gray-400);font-size:11px">(assist: '+e.assist+')</span>':''}</span></div>`;
+    });
+    // Eventos de defesa detalhados
+    const defEvs=jogoState.eventos.filter(e=>e.tipo==='defesa').map(e=>{
+      const jg=DB.jogadores.find(x=>x.id===e.jid);
+      return`<div class="evento-row"><span class="evento-min">${e.min}'</span><span>🛡️</span><span><strong>${jg?jg.nome.split(' ')[0]:'GR'}</strong></span></div>`;
+    });
+    // Eventos de substituição
+    const subEvs=jogoState.eventos.filter(e=>e.tipo==='sub').map(e=>
+      `<div class="evento-row"><span class="evento-min">${e.min}'</span><span>🔄</span><span style="font-size:12px">${e.desc}</span></div>`
+    );
     analiseEl.innerHTML=`
       <div class="metrics-grid" style="margin-bottom:12px">
+        <div class="metric-card"><div class="metric-label">⚽ Resultado</div><div class="metric-value">${jogoState.scoreH} — ${jogoState.scoreA}</div><div class="metric-sub">ADB vs Adversário</div></div>
         <div class="metric-card"><div class="metric-label">🛡️ Defesas GR</div><div class="metric-value" style="color:#2563EB">${jogoState.defesas}</div></div>
-        <div class="metric-card"><div class="metric-label">⚽ Golos</div><div class="metric-value">${jogoState.scoreH} — ${jogoState.scoreA}</div><div class="metric-sub">ADB vs Adversário</div></div>
-        <div class="metric-card"><div class="metric-label">⚡ PP a Favor</div><div class="metric-value" style="color:#059669">${ppFTotal}</div><div class="metric-sub">${ppFGolo} golo(s) · ${ppFEfic}% efic. · ${ppFDurSec>0?fmtSec(ppFDurSec):'—'}</div></div>
+        <div class="metric-card"><div class="metric-label">⚡ PP a Favor</div><div class="metric-value" style="color:#059669">${ppFTotal}</div><div class="metric-sub">${ppFGolo} golo(s) · ${ppFEfic}% · ${ppFDurSec>0?fmtSec(ppFDurSec):'—'}</div></div>
         <div class="metric-card"><div class="metric-label">⚡ PP Contra</div><div class="metric-value" style="color:#DC2626">${ppCTotal}</div><div class="metric-sub">${ppCGolo} sofrido(s) · ${ppCKill}% kill · ${ppCDurSec>0?fmtSec(ppCDurSec):'—'}</div></div>
       </div>
-      <div class="card" style="margin-top:0">
-        <div class="card-title">⚽ Golos por jogador</div>
-        ${golosHtml}
-      </div>`;
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="card" style="margin:0">
+          <div class="card-title" style="margin-bottom:8px">⚽ Golos</div>
+          ${goloEvs.length?goloEvs.join(''):'<div style="font-size:12px;color:var(--gray-400)">Sem golos registados</div>'}
+          ${golosJogArr.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100)">'+golosJogArr.map(g=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span><strong>${g.nome}</strong> <span style="color:var(--gray-400);font-size:10px">${g.mins}' campo</span></span><span style="font-weight:700;color:var(--red)">×${g.n}</span></div>`).join('')+'</div>':''}
+        </div>
+        <div class="card" style="margin:0">
+          <div class="card-title" style="margin-bottom:8px">🛡️ Defesas GR</div>
+          ${defEvs.length?defEvs.join(''):'<div style="font-size:12px;color:var(--gray-400)">Sem defesas registadas</div>'}
+          ${defesasArr.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100)">'+defesasArr.map(d=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><strong>${d.nome}</strong><span style="font-weight:700;color:#2563EB">×${d.n}</span></div>`).join('')+'</div>':''}
+        </div>
+      </div>
+      ${subEvs.length?`<div class="card" style="margin:0"><div class="card-title" style="margin-bottom:8px">🔄 Substituições</div>${subEvs.join('')}</div>`:''}`;
   }
 }
+async function gerarPDFJogo(){
+  try{
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210,margin=16,cW=W-margin*2;
+    const RED=[139,26,26],BLUE=[37,99,235],GREEN=[29,158,117],GRAY=[107,114,128],LGRAY=[243,244,246],WHITE=[255,255,255];
+    const g=jogoState.grupo;
+    let y=0;
+
+    // Header
+    doc.setFillColor(...RED);doc.rect(0,0,W,22,'F');
+    doc.setTextColor(...WHITE);
+    doc.setFontSize(15);doc.setFont('helvetica','bold');
+    doc.text('ADB CAMPO — RELATÓRIO DE JOGO',W/2,10,{align:'center'});
+    doc.setFontSize(8);doc.setFont('helvetica','normal');
+    doc.text(g+' · '+new Date().toLocaleDateString('pt-PT'),W/2,17,{align:'center'});
+    y=28;
+
+    // Resultado
+    const ppF=jogoState.powerPlays.favor,ppC=jogoState.powerPlays.contra;
+    const ppFTotal=ppF.lista.length+(ppF.ativo?1:0);
+    const ppCTotal=ppC.lista.length+(ppC.ativo?1:0);
+    const ppFGolo=ppF.lista.filter(x=>x.goloNoPP).length;
+    const ppFEfic=ppF.lista.length>0?Math.round(ppFGolo/ppF.lista.length*100):0;
+    const ppCKill=ppC.lista.length>0?Math.round(ppC.lista.filter(x=>!x.goloNoPP).length/ppC.lista.length*100):0;
+    const ppFDurSec=ppF.lista.reduce((a,x)=>a+(x.durSec||0),0);
+    const fmtS=s=>Math.floor(s/60)+"'"+String(s%60).padStart(2,'0')+"''";
+
+    doc.setFillColor(...LGRAY);doc.roundedRect(margin,y,cW,18,3,3,'F');
+    doc.setFontSize(22);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
+    doc.text(jogoState.scoreH+'  —  '+jogoState.scoreA,W/2,y+12,{align:'center'});
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+    doc.text('ADB Campo',margin+4,y+16);
+    doc.text('Adversário',W-margin-4,y+16,{align:'right'});
+    y+=24;
+
+    // Métricas
+    const metW=(cW-9)/4;
+    const mets=[
+      ['Defesas GR',String(jogoState.defesas),BLUE],
+      ['PP Favor',ppFTotal+' ('+ppFEfic+'%)',GREEN],
+      ['PP Contra',ppCTotal+' (kill '+ppCKill+'%)',RED],
+      ['Dur. PP Favor',ppFDurSec>0?fmtS(ppFDurSec):'—',GRAY]
+    ];
+    mets.forEach(function(m,i){
+      const mx=margin+i*(metW+3);
+      doc.setFillColor(...LGRAY);doc.roundedRect(mx,y,metW,14,2,2,'F');
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+      doc.text(m[0],mx+metW/2,y+5,{align:'center'});
+      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...m[2]);
+      doc.text(String(m[1]),mx+metW/2,y+11,{align:'center'});
+    });
+    y+=20;
+
+    const goloEvs=jogoState.eventos.filter(function(e){return e.tipo==='golo';});
+    const defEvs=jogoState.eventos.filter(function(e){return e.tipo==='defesa';});
+    const subEvs=jogoState.eventos.filter(function(e){return e.tipo==='sub';});
+
+    // Golos
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
+    doc.text('Golos',margin,y);
+    doc.setDrawColor(...RED);doc.setLineWidth(0.4);doc.line(margin,y+1,margin+85,y+1);
+    y+=6;
+    if(goloEvs.length){
+      goloEvs.forEach(function(e){
+        const jg=DB.jogadores.find(function(x){return x.id===e.jid;});
+        doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(30,30,30);
+        doc.text(e.min+"'",margin+2,y);
+        doc.text(jg?jg.nome:'—',margin+14,y);
+        y+=6;if(y>270){doc.addPage();y=16;}
+      });
+      const golosRes=Object.entries(jogoState.golosJog||{}).map(function(entry){
+        const jg=DB.jogadores.find(function(x){return x.id===entry[0];});
+        return (jg?jg.nome.split(' ')[0]:'?')+' x'+entry[1];
+      }).join(', ');
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+      if(golosRes)doc.text('Resumo: '+golosRes,margin+2,y);
+      y+=8;
+    } else {
+      doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+      doc.text('Sem golos registados',margin+2,y);y+=8;
+    }
+
+    // Defesas GR
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...BLUE);
+    doc.text('Defesas GR',margin,y);
+    doc.setDrawColor(...BLUE);doc.setLineWidth(0.4);doc.line(margin,y+1,margin+85,y+1);
+    y+=6;
+    if(defEvs.length){
+      defEvs.forEach(function(e){
+        const jg=DB.jogadores.find(function(x){return x.id===e.jid;});
+        doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(30,30,30);
+        doc.text(e.min+"'",margin+2,y);
+        doc.text(jg?jg.nome:'GR',margin+14,y);
+        y+=6;if(y>270){doc.addPage();y=16;}
+      });
+      const defRes=Object.entries(jogoState.defesasJog||{}).map(function(entry){
+        const jg=DB.jogadores.find(function(x){return x.id===entry[0];});
+        return (jg?jg.nome.split(' ')[0]:'GR')+' x'+entry[1];
+      }).join(', ');
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+      if(defRes)doc.text('Resumo: '+defRes,margin+2,y);
+      y+=8;
+    } else {
+      doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+      doc.text('Sem defesas registadas',margin+2,y);y+=8;
+    }
+
+    // Substituições
+    if(subEvs.length){
+      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...GRAY);
+      doc.text('Substituicoes',margin,y);
+      doc.setDrawColor(...GRAY);doc.setLineWidth(0.4);doc.line(margin,y+1,margin+85,y+1);
+      y+=6;
+      subEvs.forEach(function(e){
+        doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
+        doc.text(e.min+"'  "+e.desc,margin+2,y);
+        y+=6;if(y>270){doc.addPage();y=16;}
+      });
+    }
+
+    // Footer
+    doc.setFillColor(...LGRAY);doc.rect(0,285,W,12,'F');
+    doc.setFontSize(7);doc.setTextColor(...GRAY);doc.setFont('helvetica','normal');
+    doc.text('ADB Campo — Hóquei em Patins',margin,291);
+    doc.text('Gerado em '+new Date().toLocaleDateString('pt-PT'),W-margin,291,{align:'right'});
+
+    const fname='Relatorio_Jogo_'+g.replace(/\+/g,'_')+'_'+new Date().toISOString().split('T')[0]+'.pdf';
+    doc.save(fname);
+    toast('✅ Relatório exportado!');
+  }catch(e){
+    console.error('PDF Jogo erro:',e);
+    toast('❌ Erro: '+e.message);
+  }
+}
+
 function setJogoGrupo(g){
   jogoState.grupo=g;
   // Inicializar convocados com o grupo selecionado se ainda não definido
