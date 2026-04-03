@@ -2090,8 +2090,9 @@ function confirmarEvento(){
   } else if(pendTipo==='sub'){
     const jidSai=document.getElementById('evento-jog-sai')?.value;
     const jSai=jidSai?DB.jogadores.find(x=>x.id===jidSai):null;
-    if(jid&&jogoState.emCampo.length<5){jogoState.emCampo.push(jid);if(!jogoState.tempos[jid])jogoState.tempos[jid]=0;}
-    if(jidSai)jogoState.emCampo=jogoState.emCampo.filter(x=>x!==jidSai);
+    // Remove quem sai primeiro, depois adiciona quem entra
+    if(jidSai) jogoState.emCampo=jogoState.emCampo.filter(x=>x!==jidSai);
+    if(jid&&!jogoState.emCampo.includes(jid)){jogoState.emCampo.push(jid);if(!jogoState.tempos[jid])jogoState.tempos[jid]=0;}
     jogoState.eventos.push({tipo:'sub',min,jid,desc:'Sub — '+(j?j.nome:'?')+' entra'+(jSai?' / '+jSai.nome+' sai':''),icon:'🔄',ts:Date.now()});
   } else {
     jogoState.eventos.push({tipo:pendTipo,min,jid,desc:(pendTipo==='falta'?'Falta':pendTipo==='amarelo'?'Amarelo':pendTipo==='azul'?'Azul':'Vermelho')+(j?' — '+j.nome:''),icon:icons[pendTipo],ts:Date.now()});
