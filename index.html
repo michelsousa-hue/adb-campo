@@ -268,7 +268,10 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div id="page-jogadores" class="page">
         <div class="page-header">
           <div><div class="page-title">Jogadores</div></div>
-          <button class="btn btn-primary" onclick="openModal('modal-jogador')">+ Novo Jogador</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="openModalSubirEscalao()" style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE">⬆️ Subir Escalão</button>
+            <button class="btn btn-primary" onclick="openModal('modal-jogador')">+ Novo Jogador</button>
+          </div>
         </div>
         <div class="grupo-tabs" id="jog-gtabs"></div>
         <div class="card">
@@ -546,6 +549,35 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<div id="modal-subir-escalao" class="modal-bg">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header"><span class="modal-title">⬆️ Subir Escalão</span><button class="modal-close" onclick="closeModal('modal-subir-escalao')">✕</button></div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">Seleciona os jogadores e o novo escalão. Útil no início de cada época.</div>
+    <div class="form-row" style="margin-bottom:14px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Filtrar por escalão atual</label>
+        <select class="form-input" id="subir-filtro" onchange="renderSubirLista()">
+          <option value="">— Todos —</option>
+          <option>Sub9</option><option>Sub11</option><option>Sub13</option><option>Sub15</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Novo escalão</label>
+        <select class="form-input" id="subir-novo-escalao">
+          <option>Sub9</option><option>Sub11</option><option>Sub13</option><option>Sub15</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-sm" onclick="subirSelecionarTodos(true)">✅ Selecionar todos</button>
+      <button class="btn btn-sm" onclick="subirSelecionarTodos(false)">☐ Limpar seleção</button>
+    </div>
+    <div id="subir-lista" style="max-height:280px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:8px;padding:4px 0;margin-bottom:14px"></div>
+    <div id="subir-contagem" style="font-size:12px;color:var(--gray-500);margin-bottom:12px"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="confirmarSubirEscalao()">⬆️ Subir Escalão dos Selecionados</button>
+  </div>
+</div>
+
 <div id="modal-delegado" class="modal-bg">
   <div class="modal">
     <div class="modal-header"><span class="modal-title" id="modal-delegado-title">Novo Delegado</span><button class="modal-close" onclick="closeModal('modal-delegado')">✕</button></div>
@@ -564,9 +596,15 @@ textarea.form-input{resize:vertical;min-height:70px}
   <div class="modal">
     <div class="modal-header"><span class="modal-title" id="modal-perfil-title">Novo Perfil</span><button class="modal-close" onclick="closeModal('modal-perfil')">✕</button></div>
     <input type="hidden" id="perfil-edit-key">
-    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Nome do perfil</label><input type="text" class="form-input" id="perfil-nome" placeholder="ex: Treinador Sub17"></div>
-    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Grupos (separados por vírgula)</label><input type="text" class="form-input" id="perfil-grupos" placeholder="ex: Sub17+Sub20 (ou deixa vazio para acesso total)"></div>
-    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Nº Licença</label><input type="text" class="form-input" id="perfil-licenca" placeholder="ex: 123456"></div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Nome completo</label><input type="text" class="form-input" id="perfil-nome" placeholder="ex: João Silva"></div>
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:10px"><label class="form-label">Nº Licença</label><input type="text" class="form-input" id="perfil-licenca" placeholder="ex: 123456"></div>
+      <div class="form-group" style="margin-bottom:10px"><label class="form-label">Contacto</label><input type="text" class="form-input" id="perfil-cont" placeholder="ex: 912345678"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Escalões (pode selecionar mais do que um)</label>
+      <div id="perfil-grupos-checks" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
+      <div style="margin-top:6px"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="perfil-acesso-total"> <span style="color:var(--gray-500)">Acesso total (Coordenador)</span></label></div>
+    </div>
     <div class="form-group" style="margin-bottom:16px"><label class="form-label">PIN (4 dígitos)</label><input type="password" class="form-input" id="perfil-pin" maxlength="4" placeholder="1234"></div>
     <button class="btn btn-primary" style="width:100%" onclick="savePerfil()">Guardar Perfil</button>
   </div>
@@ -687,7 +725,7 @@ async function loadAllData(){
       if(c.key==='pins') DB.config.pins=JSON.parse(c.value);
       if(c.key==='epoca') DB.config.epoca=c.value;
       if(c.key==='grupos'){try{const g=JSON.parse(c.value);if(Array.isArray(g)&&g.length>0){GRUPOS.length=0;g.forEach(x=>GRUPOS.push(x));}}catch(e){}}
-      if(c.key==='profiles'){try{const ps=JSON.parse(c.value);if(Array.isArray(ps)&&ps.length>0){profiles.length=0;ps.forEach(p=>profiles.push(p));}}catch(e){}}
+      if(c.key==='profiles'){try{const ps=JSON.parse(c.value);if(Array.isArray(ps)&&ps.length>0){profiles.length=0;ps.forEach(p=>profiles.push({...p,licenca:p.licenca||'',cont:p.cont||''}));}}catch(e){}}
     });
     // Seed jogadores if empty
     if(DB.jogadores.length===0) await seedJogadores();
@@ -1628,31 +1666,29 @@ async function gerarPDFConvocatoria(){try{
     if(y>268){doc.addPage();y=16;}
   });
 
-  // ── Signature area — Treinador + Delegados ──
+  // ── Signature area — todos os intervenientes do escalão ──
   y+=10;
-  // Treinador do grupo
-  const treinadorGrupo=profiles.find(p=>p.grupos&&p.grupos.includes(g));
-  const treinadorNome=treinadorGrupo?treinadorGrupo.name:'Treinador';
+  // Treinadores do grupo (pode haver mais do que um)
+  const treinadoresGrupo=profiles.filter(p=>p.grupos&&p.grupos.includes(g));
   // Delegados do grupo
   const delegadosGrupo=(DB.delegados||[]).filter(d=>(d.grupos||[]).includes(g));
-  const totalAssin=1+delegadosGrupo.length;
+  // Todos juntos
+  const intervenientes=[
+    ...treinadoresGrupo.map(p=>({nome:p.name,licenca:p.licenca||'',role:'Treinador'})),
+    ...delegadosGrupo.map(d=>({nome:d.nome,licenca:d.licenca||'',role:'Delegado'}))
+  ];
+  if(!intervenientes.length) intervenientes.push({nome:'',licenca:'',role:'Treinador'});
+  const totalAssin=intervenientes.length;
   const assinW=cW/Math.max(totalAssin,2);
-  if(y+28>280){doc.addPage();y=16;}
+  if(y+30>280){doc.addPage();y=16;}
   doc.setDrawColor(...GRAY);doc.setLineWidth(0.4);
-  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-  // Treinador
-  const treinadorLic=treinadorGrupo&&treinadorGrupo.licenca?'Lic. '+treinadorGrupo.licenca:'';
-  doc.line(margin,y+14,margin+assinW-4,y+14);
-  doc.text(treinadorNome,margin+assinW/2-2,y+19,{align:'center'});
-  doc.setFontSize(7);doc.text('Treinador'+(treinadorLic?' · '+treinadorLic:''),margin+assinW/2-2,y+23,{align:'center'});
-  // Delegados
-  delegadosGrupo.forEach((d,i)=>{
-    const dx=margin+(i+1)*assinW;
-    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-    doc.line(dx,y+14,dx+assinW-4,y+14);
-    doc.text(d.nome,dx+assinW/2-2,y+19,{align:'center'});
-    doc.setFontSize(7);
-    doc.text('Delegado'+(d.licenca?' · Lic.'+d.licenca:''),dx+assinW/2-2,y+23,{align:'center'});
+  intervenientes.forEach((inv,i)=>{
+    const dx=margin+i*assinW;
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(30,30,30);
+    doc.line(dx,y+12,dx+assinW-4,y+12);
+    doc.text(inv.nome||' ',dx+assinW/2-2,y+17,{align:'center'});
+    doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+    doc.text(inv.role+(inv.licenca?' · Lic. '+inv.licenca:''),dx+assinW/2-2,y+22,{align:'center'});
   });
 
   // ── Footer ──
@@ -2229,6 +2265,58 @@ function renderAdmin(){
   renderAdminPerfis();
   renderAdminGrupos();
 }
+function openModalSubirEscalao(){
+  document.getElementById('subir-filtro').value='';
+  document.getElementById('subir-novo-escalao').value='Sub11';
+  renderSubirLista();
+  openModal('modal-subir-escalao');
+}
+function renderSubirLista(){
+  const filtro=document.getElementById('subir-filtro').value;
+  const jogs=[...DB.jogadores].filter(j=>!filtro||j.sub===filtro).sort((a,b)=>a.nome.localeCompare(b.nome));
+  // Auto-sugerir novo escalão com base no filtro
+  const subirMap={'Sub9':'Sub11','Sub11':'Sub13','Sub13':'Sub15','Sub15':'Sub15'};
+  if(filtro&&subirMap[filtro]) document.getElementById('subir-novo-escalao').value=subirMap[filtro];
+  const lista=document.getElementById('subir-lista');
+  if(!jogs.length){lista.innerHTML='<div style="padding:12px;font-size:12px;color:var(--gray-400)">Nenhum jogador encontrado.</div>';return;}
+  lista.innerHTML=jogs.map(j=>`
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--gray-100);font-size:13px">
+      <input type="checkbox" class="subir-check" data-id="${j.id}" checked>
+      <span style="flex:1"><strong>${j.nome}</strong> <span style="color:var(--gray-400);font-size:11px">#${j.num}</span></span>
+      <span class="badge badge-gray">${j.sub}</span>
+    </label>`).join('');
+  // Listener para atualizar contagem
+  lista.querySelectorAll('.subir-check').forEach(cb=>cb.addEventListener('change',atualizarContagemSubir));
+  atualizarContagemSubir();
+}
+function atualizarContagemSubir(){
+  const sel=document.querySelectorAll('.subir-check:checked').length;
+  const total=document.querySelectorAll('.subir-check').length;
+  document.getElementById('subir-contagem').textContent=sel+' de '+total+' jogadores selecionados';
+}
+function subirSelecionarTodos(sel){
+  document.querySelectorAll('.subir-check').forEach(cb=>cb.checked=sel);
+  atualizarContagemSubir();
+}
+async function confirmarSubirEscalao(){
+  const novoSub=document.getElementById('subir-novo-escalao').value;
+  const selecionados=[...document.querySelectorAll('.subir-check:checked')].map(cb=>cb.dataset.id);
+  if(!selecionados.length){toast('Seleciona pelo menos um jogador!');return;}
+  if(!confirm('Subir '+selecionados.length+' jogador(es) para '+novoSub+'?'))return;
+  showLoading(true);
+  // Update em batch
+  for(const jid of selecionados){
+    await sb.from('jogadores').update({sub:novoSub}).eq('id',jid);
+    const j=DB.jogadores.find(x=>x.id===jid);
+    if(j) j.sub=novoSub;
+  }
+  showLoading(false);
+  closeModal('modal-subir-escalao');
+  toast('✅ '+selecionados.length+' jogador(es) atualizados para '+novoSub+'!');
+  showSync();
+  renderPage(currentPage);
+}
+
 function renderAdminDelegados(){
   const el=document.getElementById('admin-delegados-list');if(!el)return;
   if(!DB.delegados.length){el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">Sem delegados registados.</div>';return;}
@@ -2289,7 +2377,11 @@ async function deleteDelegado(id){
 function renderAdminPerfis(){
   const el=document.getElementById('admin-perfis-list');if(!el)return;
   el.innerHTML=profiles.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
-    <div style="flex:1"><strong>${p.name}</strong> <span style="color:var(--gray-400);font-size:11px">${p.grupos?p.grupos.join(', '):'Acesso total'}</span></div>
+    <div style="flex:1">
+      <strong>${p.name}</strong>
+      ${p.licenca?`<span style="color:var(--gray-400);font-size:11px;margin-left:6px">Lic. ${p.licenca}</span>`:''}
+      <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${p.grupos?p.grupos.join(', '):'Acesso total'}${p.cont?' · '+p.cont:''}</div>
+    </div>
     <button class="btn btn-sm" onclick="openModalPerfil('${p.key}')">✏️ Editar</button>
     ${p.key!=='coord'?`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>`:'<span style="font-size:10px;color:var(--gray-400)">Sistema</span>'}
   </div>`).join('');
@@ -2306,32 +2398,38 @@ function openModalPerfil(key){
   document.getElementById('perfil-edit-key').value=key||'';
   document.getElementById('modal-perfil-title').textContent=p?'Editar Perfil':'Novo Perfil';
   document.getElementById('perfil-nome').value=p?p.name:'';
-  document.getElementById('perfil-grupos').value=p&&p.grupos?p.grupos.join(', '):'';
   document.getElementById('perfil-licenca').value=p?p.licenca||'':'';
+  document.getElementById('perfil-cont').value=p?p.cont||'':'';
   document.getElementById('perfil-pin').value='';
+  // Checkboxes escalões
+  const wrap=document.getElementById('perfil-grupos-checks');
+  wrap.innerHTML=GRUPOS.map(g=>`<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer">
+    <input type="checkbox" value="${g}" ${p&&(p.grupos||[]).includes(g)?'checked':''}>
+    <span>${g}</span>
+  </label>`).join('');
+  document.getElementById('perfil-acesso-total').checked=p&&!p.grupos;
   openModal('modal-perfil');
 }
 async function savePerfil(){
   const nome=document.getElementById('perfil-nome').value.trim();
-  const gruposRaw=document.getElementById('perfil-grupos').value.trim();
   const pin=document.getElementById('perfil-pin').value.trim();
   const editKey=document.getElementById('perfil-edit-key').value;
   if(!nome){alert('Introduz o nome do perfil');return;}
   const licenca=document.getElementById('perfil-licenca').value.trim();
-  const grupos=gruposRaw?gruposRaw.split(',').map(g=>g.trim()).filter(Boolean):null;
+  const cont=document.getElementById('perfil-cont').value.trim();
+  const acessoTotal=document.getElementById('perfil-acesso-total').checked;
+  const grupos=acessoTotal?null:[...document.querySelectorAll('#perfil-grupos-checks input:checked')].map(x=>x.value);
   if(editKey){
-    // Edit existing
     const p=profiles.find(x=>x.key===editKey);
-    if(p){p.name=nome;p.grupos=grupos;p.licenca=licenca;if(pin&&pin.length===4)DB.config.pins[editKey]=pin;}
+    if(p){p.name=nome;p.grupos=grupos;p.licenca=licenca;p.cont=cont;if(pin&&pin.length===4)DB.config.pins[editKey]=pin;}
   } else {
-    // New
     if(!pin||pin.length!==4||!/^\d{4}$/.test(pin)){alert('PIN deve ter 4 dígitos');return;}
     const key='t'+(Date.now()%10000);
-    profiles.push({key,name:nome,role:grupos?grupos.join('+'):'Acesso total',grupos,licenca});
+    profiles.push({key,name:nome,role:grupos?grupos.join('+'):'Acesso total',grupos,licenca,cont});
     DB.config.pins[key]=pin;
   }
   await sb.from('config').upsert({key:'pins',value:JSON.stringify(DB.config.pins)});
-  await sb.from('config').upsert({key:'profiles',value:JSON.stringify(profiles.map(p=>({key:p.key,name:p.name,role:p.role||p.name,grupos:p.grupos})))});
+  await sb.from('config').upsert({key:'profiles',value:JSON.stringify(profiles.map(p=>({key:p.key,name:p.name,role:p.role||p.name,grupos:p.grupos,licenca:p.licenca||'',cont:p.cont||''})))});
   closeModal('modal-perfil');toast('✅ Perfil guardado!');renderAdmin();
 }
 async function deletePerfil(key){
