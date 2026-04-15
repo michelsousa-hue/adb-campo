@@ -425,6 +425,11 @@ textarea.form-input{resize:vertical;min-height:70px}
           <div class="metrics-grid" id="admin-metrics"></div>
         </div>
         <div class="card" style="margin-top:12px">
+          <div class="card-title" style="margin-bottom:12px">🪪 Delegados</div>
+          <div id="admin-delegados-list" style="margin-bottom:12px"></div>
+          <button class="btn btn-primary" onclick="openModalDelegado()" style="font-size:13px">+ Novo Delegado</button>
+        </div>
+        <div class="card" style="margin-top:12px">
           <div class="card-title" style="margin-bottom:12px">👥 Perfis de Treinador</div>
           <div id="admin-perfis-list" style="margin-bottom:12px"></div>
           <button class="btn btn-primary" onclick="openModalPerfil()" style="font-size:13px">+ Novo Perfil</button>
@@ -474,6 +479,7 @@ textarea.form-input{resize:vertical;min-height:70px}
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Nascimento</label><input type="date" class="form-input" id="jog-nasc"></div>
+      <div class="form-group"><label class="form-label">Nº Licença</label><input type="text" class="form-input" id="jog-licenca" placeholder="ex: 123456"></div>
 <!-- v20260319223230 avaliação calculada automaticamente -->
       <div class="form-group"><label class="form-label">Foto do Jogador</label>
         <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
@@ -540,12 +546,27 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<div id="modal-delegado" class="modal-bg">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title" id="modal-delegado-title">Novo Delegado</span><button class="modal-close" onclick="closeModal('modal-delegado')">✕</button></div>
+    <input type="hidden" id="delegado-edit-id">
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Nome completo</label><input type="text" class="form-input" id="delegado-nome" placeholder="ex: João Silva"></div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Nº Licença</label><input type="text" class="form-input" id="delegado-licenca" placeholder="ex: 123456"></div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Contacto</label><input type="text" class="form-input" id="delegado-cont" placeholder="ex: 912345678"></div>
+    <div class="form-group" style="margin-bottom:16px"><label class="form-label">Escalões (pode selecionar mais do que um)</label>
+      <div id="delegado-grupos-checks" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveDelegado()">Guardar Delegado</button>
+  </div>
+</div>
+
 <div id="modal-perfil" class="modal-bg">
   <div class="modal">
     <div class="modal-header"><span class="modal-title" id="modal-perfil-title">Novo Perfil</span><button class="modal-close" onclick="closeModal('modal-perfil')">✕</button></div>
     <input type="hidden" id="perfil-edit-key">
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Nome do perfil</label><input type="text" class="form-input" id="perfil-nome" placeholder="ex: Treinador Sub17"></div>
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Grupos (separados por vírgula)</label><input type="text" class="form-input" id="perfil-grupos" placeholder="ex: Sub17+Sub20 (ou deixa vazio para acesso total)"></div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Nº Licença</label><input type="text" class="form-input" id="perfil-licenca" placeholder="ex: 123456"></div>
     <div class="form-group" style="margin-bottom:16px"><label class="form-label">PIN (4 dígitos)</label><input type="password" class="form-input" id="perfil-pin" maxlength="4" placeholder="1234"></div>
     <button class="btn btn-primary" style="width:100%" onclick="savePerfil()">Guardar Perfil</button>
   </div>
@@ -585,7 +606,7 @@ const COMPS = [
 ];
 
 // ═══ STATE ═══
-let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'} };
+let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'}, delegados:[] };
 let jogoState = { scoreH:0, scoreA:0, eventos:[], emCampo:[], tempos:{}, timerSec:0, running:false, paused:false, grupo:'Sub13+Sub15', numPartes:2, durParte:15, parteAtual:1, parteIniciada:false, powerPlays:{ favor:{ ativo:false, inicio:null, lista:[] }, contra:{ ativo:false, inicio:null, lista:[] } }, defesas:0, defesasJog:{}, golosJog:{}, convocados:[] };
 let currentUser = null;
 let currentPin = '';
@@ -626,12 +647,13 @@ async function loadAllData(){
   _loadingData = true;
   showLoading(true);
   try {
-    const [jogsR, sessR, avalR, cfgR, jogosR] = await Promise.all([
+    const [jogsR, sessR, avalR, cfgR, jogosR, delegR] = await Promise.all([
       sb.from('jogadores').select('*').order('nome'),
       sb.from('sessoes').select('*').order('data',{ascending:false}),
       sb.from('avaliacoes').select('*'),
       sb.from('config').select('*'),
       sb.from('jogos').select('*').order('data',{ascending:false}),
+      sb.from('delegados').select('*'),
     ]);
     // Deduplicate jogadores by id (fix for repeated players bug)
     const rawJogs = jogsR.data || [];
@@ -659,6 +681,7 @@ async function loadAllData(){
     }
     // Jogos
     DB.jogos = jogosR.data || [];
+    DB.delegados = delegR?.data || [];
     // Config
     (cfgR.data||[]).forEach(c=>{
       if(c.key==='pins') DB.config.pins=JSON.parse(c.value);
@@ -1010,6 +1033,7 @@ function openEditJogador(id){
   document.getElementById('jog-sub').value=j.sub;
   document.getElementById('jog-pos').value=j.pos;
   document.getElementById('jog-nasc').value=j.nasc||'';
+  document.getElementById('jog-licenca').value=j.licenca||'';
   editingFotoB64=j.foto||null;
   const prev=document.getElementById('jog-foto-preview');
   if(j.foto){prev.innerHTML=`<img src="${j.foto}" style="width:100%;height:100%;object-fit:cover">`;document.getElementById('jog-foto-clear').style.display='inline-block';}
@@ -1580,8 +1604,8 @@ async function gerarPDFConvocatoria(){try{
   doc.text('Nome',margin+10,y+5);
   doc.text('Escalão',margin+80,y+5);
   doc.text('Posição',margin+105,y+5);
-  doc.text('Nº',margin+130,y+5);
-  doc.text('Pres.%',margin+145,y+5);
+  doc.text('Licença',margin+130,y+5);
+  doc.text('Nº',margin+158,y+5);
   y+=7;
 
   // ── Table rows ──
@@ -1597,26 +1621,39 @@ async function gerarPDFConvocatoria(){try{
     doc.setFont('helvetica','normal');
     doc.text(j.sub||'—',margin+80,y+5);
     doc.text(j.pos||'—',margin+105,y+5);
-    doc.text(j.num||'—',margin+130,y+5);
-    // Pres % with colour
-    const pct=st.taxa;
-    const pColor=pct>=75?[29,158,117]:pct>=60?[239,159,39]:[220,38,38];
-    doc.setTextColor(...pColor);doc.setFont('helvetica','bold');
-    doc.text(`${pct}%`,margin+145,y+5);
+    doc.text(j.licenca||'—',margin+130,y+5);
+    doc.text(j.num||'—',margin+158,y+5);
     doc.setTextColor(30,30,30);
     y+=7;
     if(y>268){doc.addPage();y=16;}
   });
 
-  // ── Signature area ──
+  // ── Signature area — Treinador + Delegados ──
   y+=10;
+  // Treinador do grupo
+  const treinadorGrupo=profiles.find(p=>p.grupos&&p.grupos.includes(g));
+  const treinadorNome=treinadorGrupo?treinadorGrupo.name:'Treinador';
+  // Delegados do grupo
+  const delegadosGrupo=(DB.delegados||[]).filter(d=>(d.grupos||[]).includes(g));
+  const totalAssin=1+delegadosGrupo.length;
+  const assinW=cW/Math.max(totalAssin,2);
   if(y+28>280){doc.addPage();y=16;}
   doc.setDrawColor(...GRAY);doc.setLineWidth(0.4);
-  doc.line(margin,y+14,margin+60,y+14);
-  doc.line(W-margin-60,y+14,W-margin,y+14);
   doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-  doc.text('Treinador',margin+30,y+19,{align:'center'});
-  doc.text('Coordenador',W-margin-30,y+19,{align:'center'});
+  // Treinador
+  const treinadorLic=treinadorGrupo&&treinadorGrupo.licenca?'Lic. '+treinadorGrupo.licenca:'';
+  doc.line(margin,y+14,margin+assinW-4,y+14);
+  doc.text(treinadorNome,margin+assinW/2-2,y+19,{align:'center'});
+  doc.setFontSize(7);doc.text('Treinador'+(treinadorLic?' · '+treinadorLic:''),margin+assinW/2-2,y+23,{align:'center'});
+  // Delegados
+  delegadosGrupo.forEach((d,i)=>{
+    const dx=margin+(i+1)*assinW;
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+    doc.line(dx,y+14,dx+assinW-4,y+14);
+    doc.text(d.nome,dx+assinW/2-2,y+19,{align:'center'});
+    doc.setFontSize(7);
+    doc.text('Delegado'+(d.licenca?' · Lic.'+d.licenca:''),dx+assinW/2-2,y+23,{align:'center'});
+  });
 
   // ── Footer ──
   doc.setFillColor(...LGRAY);doc.rect(0,285,W,12,'F');
@@ -2188,9 +2225,67 @@ function renderAdmin(){
   document.getElementById('epoca-label').textContent=DB.config.epoca;
   document.getElementById('pins-tbody').innerHTML=profiles.map(p=>`<tr><td>${p.name}</td><td><span style="font-family:var(--mono)">••••</span></td><td style="display:flex;gap:6px"><button class="btn btn-sm" onclick="openChangePIN('${p.key}','${p.name}')">Alterar PIN</button>${p.key!=='coord'?`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>`:''}</td></tr>`).join('');
   document.getElementById('admin-metrics').innerHTML=`<div class="metric-card"><div class="metric-label">Total jogadores</div><div class="metric-value">${DB.jogadores.length}</div></div><div class="metric-card"><div class="metric-label">Sessões</div><div class="metric-value">${DB.sessoes.length}</div></div>${GRUPOS.map(g=>`<div class="metric-card"><div class="metric-label">${g}</div><div class="metric-value">${jogsDoGrupo(g).length}</div></div>`).join('')}`;
+  renderAdminDelegados();
   renderAdminPerfis();
   renderAdminGrupos();
 }
+function renderAdminDelegados(){
+  const el=document.getElementById('admin-delegados-list');if(!el)return;
+  if(!DB.delegados.length){el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">Sem delegados registados.</div>';return;}
+  el.innerHTML=DB.delegados.map(d=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
+    <div style="flex:1">
+      <strong>${d.nome}</strong>
+      <span style="color:var(--gray-400);font-size:11px;margin-left:6px">Lic. ${d.licenca||'—'}</span>
+      <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${(d.grupos||[]).join(', ')||'Sem escalão'}</div>
+    </div>
+    <button class="btn btn-sm" onclick="openModalDelegado('${d.id}')">✏️</button>
+    <button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deleteDelegado('${d.id}')">🗑️</button>
+  </div>`).join('');
+}
+function openModalDelegado(id){
+  const d=id?DB.delegados.find(x=>x.id===id):null;
+  document.getElementById('delegado-edit-id').value=id||'';
+  document.getElementById('modal-delegado-title').textContent=d?'Editar Delegado':'Novo Delegado';
+  document.getElementById('delegado-nome').value=d?d.nome:'';
+  document.getElementById('delegado-licenca').value=d?d.licenca||'':'';
+  document.getElementById('delegado-cont').value=d?d.cont||'':'';
+  // Checkboxes dos grupos
+  const wrap=document.getElementById('delegado-grupos-checks');
+  wrap.innerHTML=GRUPOS.map(g=>`<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer">
+    <input type="checkbox" value="${g}" ${d&&(d.grupos||[]).includes(g)?'checked':''}>
+    <span>${g}</span>
+  </label>`).join('');
+  openModal('modal-delegado');
+}
+async function saveDelegado(){
+  const nome=document.getElementById('delegado-nome').value.trim();
+  if(!nome){alert('Introduz o nome do delegado');return;}
+  const licenca=document.getElementById('delegado-licenca').value.trim();
+  const cont=document.getElementById('delegado-cont').value.trim();
+  const grupos=[...document.querySelectorAll('#delegado-grupos-checks input:checked')].map(x=>x.value);
+  const editId=document.getElementById('delegado-edit-id').value;
+  showLoading(true);
+  if(editId){
+    const rec={nome,licenca,cont,grupos};
+    await sb.from('delegados').update(rec).eq('id',editId);
+    const idx=DB.delegados.findIndex(x=>x.id===editId);
+    if(idx>=0)DB.delegados[idx]={...DB.delegados[idx],...rec};
+  } else {
+    const rec={id:uid(),nome,licenca,cont,grupos};
+    await sb.from('delegados').insert(rec);
+    DB.delegados.push(rec);
+  }
+  showLoading(false);
+  closeModal('modal-delegado');toast('✅ Delegado guardado!');showSync();
+  renderAdminDelegados();
+}
+async function deleteDelegado(id){
+  if(!confirm('Apagar este delegado?'))return;
+  await sb.from('delegados').delete().eq('id',id);
+  DB.delegados=DB.delegados.filter(x=>x.id!==id);
+  toast('🗑️ Delegado apagado');renderAdminDelegados();
+}
+
 function renderAdminPerfis(){
   const el=document.getElementById('admin-perfis-list');if(!el)return;
   el.innerHTML=profiles.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
@@ -2212,6 +2307,7 @@ function openModalPerfil(key){
   document.getElementById('modal-perfil-title').textContent=p?'Editar Perfil':'Novo Perfil';
   document.getElementById('perfil-nome').value=p?p.name:'';
   document.getElementById('perfil-grupos').value=p&&p.grupos?p.grupos.join(', '):'';
+  document.getElementById('perfil-licenca').value=p?p.licenca||'':'';
   document.getElementById('perfil-pin').value='';
   openModal('modal-perfil');
 }
@@ -2221,16 +2317,17 @@ async function savePerfil(){
   const pin=document.getElementById('perfil-pin').value.trim();
   const editKey=document.getElementById('perfil-edit-key').value;
   if(!nome){alert('Introduz o nome do perfil');return;}
+  const licenca=document.getElementById('perfil-licenca').value.trim();
   const grupos=gruposRaw?gruposRaw.split(',').map(g=>g.trim()).filter(Boolean):null;
   if(editKey){
     // Edit existing
     const p=profiles.find(x=>x.key===editKey);
-    if(p){p.name=nome;p.grupos=grupos;if(pin&&pin.length===4)DB.config.pins[editKey]=pin;}
+    if(p){p.name=nome;p.grupos=grupos;p.licenca=licenca;if(pin&&pin.length===4)DB.config.pins[editKey]=pin;}
   } else {
     // New
     if(!pin||pin.length!==4||!/^\d{4}$/.test(pin)){alert('PIN deve ter 4 dígitos');return;}
     const key='t'+(Date.now()%10000);
-    profiles.push({key,name:nome,role:grupos?grupos.join('+'):'Acesso total',grupos});
+    profiles.push({key,name:nome,role:grupos?grupos.join('+'):'Acesso total',grupos,licenca});
     DB.config.pins[key]=pin;
   }
   await sb.from('config').upsert({key:'pins',value:JSON.stringify(DB.config.pins)});
@@ -2313,7 +2410,7 @@ async function saveJogador(){
   const nome=document.getElementById('jog-nome').value.trim();if(!nome){alert('Introduz o nome');return;}
   showLoading(true);
   if(editingJogId){
-    const fotoVal=editingFotoB64!==null?editingFotoB64:undefined;const updates={nome,num:document.getElementById('jog-num').value||'—',sub:document.getElementById('jog-sub').value,pos:document.getElementById('jog-pos').value,nasc:document.getElementById('jog-nasc').value,cont:document.getElementById('jog-cont').value,obs:document.getElementById('jog-obs').value,...(fotoVal!==undefined&&{foto:fotoVal})};
+    const fotoVal=editingFotoB64!==null?editingFotoB64:undefined;const updates={nome,num:document.getElementById('jog-num').value||'—',sub:document.getElementById('jog-sub').value,pos:document.getElementById('jog-pos').value,nasc:document.getElementById('jog-nasc').value,licenca:document.getElementById('jog-licenca').value||'',cont:document.getElementById('jog-cont').value,obs:document.getElementById('jog-obs').value,...(fotoVal!==undefined&&{foto:fotoVal})};
     await sb.from('jogadores').update(updates).eq('id',editingJogId);
     const idx=DB.jogadores.findIndex(x=>x.id===editingJogId);
     if(idx>=0)DB.jogadores[idx]={...DB.jogadores[idx],...updates};
@@ -2322,7 +2419,7 @@ async function saveJogador(){
     document.querySelector('#modal-jogador .btn-primary').textContent='Adicionar Jogador';
     showLoading(false);closeModal('modal-jogador');renderPage(currentPage);toast('✅ Jogador atualizado!');showSync();
   } else {
-    const j={id:uid(),nome,num:document.getElementById('jog-num').value||'—',sub:document.getElementById('jog-sub').value,pos:document.getElementById('jog-pos').value,nasc:document.getElementById('jog-nasc').value,cont:document.getElementById('jog-cont').value,obs:document.getElementById('jog-obs').value,foto:editingFotoB64||null};
+    const j={id:uid(),nome,num:document.getElementById('jog-num').value||'—',sub:document.getElementById('jog-sub').value,pos:document.getElementById('jog-pos').value,nasc:document.getElementById('jog-nasc').value,licenca:document.getElementById('jog-licenca').value||'',cont:document.getElementById('jog-cont').value,obs:document.getElementById('jog-obs').value,foto:editingFotoB64||null};
     await sb.from('jogadores').insert(j);
     DB.jogadores.push(j);
     showLoading(false);closeModal('modal-jogador');renderPage(currentPage);toast('✅ Jogador adicionado!');showSync();
