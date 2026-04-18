@@ -185,6 +185,10 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div class="pin-profile-icon" style="background:#D1FAE5">🏒</div>
         <div><div class="pin-profile-name">Treinador Sub13+Sub15</div><div class="pin-profile-role">Grupo 2</div></div>
       </div>
+      <div class="pin-profile" onclick="selectProfile('mesa')" id="profile-mesa" style="border-color:#F59E0B;background:#FFFBEB">
+        <div class="pin-profile-icon" style="background:#FEF3C7">📋</div>
+        <div><div class="pin-profile-name">Mesa de Jogo</div><div class="pin-profile-role">Registo do jogo</div></div>
+      </div>
     </div>
     <div id="pin-entry" style="display:none">
       <div class="pin-input-label">Introduz o PIN</div>
@@ -426,6 +430,15 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div class="card">
           <div class="card-title">📊 Época atual: <span id="epoca-label"></span></div>
           <div class="metrics-grid" id="admin-metrics"></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-title" style="margin-bottom:12px">📋 Mesa de Jogo</div>
+          <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">PIN para pais/delegados registarem o jogo ao vivo. Acesso restrito ao Jogo ao Vivo.</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="password" class="form-input" id="mesa-pin-inp" maxlength="4" placeholder="PIN 4 dígitos" style="max-width:140px">
+            <button class="btn btn-primary" onclick="saveMesaPin()" style="font-size:13px">Guardar PIN</button>
+          </div>
+          <div id="mesa-pin-atual" style="font-size:12px;color:var(--gray-500);margin-top:8px"></div>
         </div>
         <div class="card" style="margin-top:12px">
           <div class="card-title" style="margin-bottom:12px">🪪 Delegados</div>
@@ -809,6 +822,7 @@ async function seedAvaliacoes(){
 // ═══ AUTH ═══
 function selectProfile(idx){
   selectedProfile=idx;
+  if(idx==='mesa'){doLoginMesa();return;}
   document.querySelectorAll('.pin-profile').forEach((el,i)=>el.classList.toggle('selected',i===idx));
   document.getElementById('profile-list').style.display='none';
   document.getElementById('pin-entry').style.display='block';
@@ -820,6 +834,21 @@ function pinBack(){currentPin=currentPin.slice(0,-1);updateDots();}
 function pinClear(){currentPin='';updateDots();}
 function updateDots(){for(let i=0;i<4;i++)document.getElementById('dot-'+i).classList.toggle('filled',i<currentPin.length);}
 function pinEnter(){
+  // Mesa de Jogo
+  if(selectedProfile==='mesa'){
+    const mesaPin=DB.config.pins['mesa']||'0000';
+    if(currentPin!==mesaPin){alert('PIN incorrecto');backToProfiles();return;}
+    currentUser={key:'mesa',name:'Mesa de Jogo',role:'Mesa de Jogo',grupos:null};
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='flex';
+    setupForUser();
+    renderPage('jogo');
+    // Activar nav jogo
+    document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+    const navJogo=document.querySelector('[data-page="jogo"]');
+    if(navJogo)navJogo.classList.add('active');
+    return;
+  }
   const p=profiles[selectedProfile];
   const stored=DB.config.pins[p.key]||'1234';
   if(currentPin===stored){
@@ -844,14 +873,32 @@ function logout(){
 }
 function setupForUser(){
   const isCoord=currentUser.key==='coord';
+  const isMesa=currentUser.key==='mesa';
   document.querySelectorAll('.coord-only').forEach(el=>el.style.display=isCoord?'':'none');
   if(!isCoord){
     document.querySelector('[data-page="admin"]').style.display='none';
     if(currentUser.key==='t2')document.querySelector('[data-page="avaliacao"]').style.display='none';
   }
+  // Mesa de Jogo: esconder tudo exceto Jogo ao Vivo
+  if(isMesa){
+    document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
+      el.style.display=el.dataset.page==='jogo'?'':'none';
+    });
+    document.querySelectorAll('.nav-section').forEach(el=>el.style.display='none');
+  }
   // Set default group based on profile
   const defaultGrupo = currentUser.key==='t1' ? 'Sub9+Sub11' : 'Sub13+Sub15';
   Object.keys(currentGrupo).forEach(k => currentGrupo[k] = defaultGrupo);
+}
+function doLoginMesa(){
+  // PIN para Mesa de Jogo guardado na config
+  const mesaPin=DB.config.pins['mesa']||'0000';
+  selectedProfile='mesa';
+  document.getElementById('profile-list').style.display='none';
+  document.getElementById('pin-entry').style.display='block';
+  document.getElementById('pin-who').textContent='Mesa de Jogo';
+  currentPin='';
+  document.querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
 }
 
 // ═══ NAV ═══
@@ -2264,6 +2311,7 @@ function renderAdmin(){
   renderAdminDelegados();
   renderAdminPerfis();
   renderAdminGrupos();
+  renderAdminMesa();
 }
 function openModalSubirEscalao(){
   document.getElementById('subir-filtro').value='';
@@ -2315,6 +2363,22 @@ async function confirmarSubirEscalao(){
   toast('✅ '+selecionados.length+' jogador(es) atualizados para '+novoSub+'!');
   showSync();
   renderPage(currentPage);
+}
+
+function renderAdminMesa(){
+  const pin=DB.config.pins['mesa']||'0000';
+  const el=document.getElementById('mesa-pin-atual');
+  if(el) el.textContent='PIN actual: ****  (definido)';
+  const inp=document.getElementById('mesa-pin-inp');
+  if(inp) inp.value='';
+}
+async function saveMesaPin(){
+  const pin=document.getElementById('mesa-pin-inp').value.trim();
+  if(!pin||pin.length!==4||!/^\d{4}$/.test(pin)){alert('PIN deve ter 4 dígitos');return;}
+  DB.config.pins['mesa']=pin;
+  await sb.from('config').upsert({key:'pins',value:JSON.stringify(DB.config.pins)});
+  toast('✅ PIN da Mesa de Jogo guardado!');
+  renderAdminMesa();
 }
 
 function renderAdminDelegados(){
