@@ -1784,7 +1784,10 @@ function renderJogoAoVivo(){
   // Botão defesa — só ativo se GR em campo
   const btnDefesa=document.getElementById('btn-defesa-gr');
   if(btnDefesa){btnDefesa.disabled=!grEmCampo;btnDefesa.style.opacity=grEmCampo?'1':'0.4';btnDefesa.title=grEmCampo?'Defesa do GR '+grEmCampo.nome:'Coloca o GR em campo primeiro';}
-  document.getElementById('eventos-list').innerHTML=[...jogoState.eventos].reverse().slice(0,30).map(e=>`<div class="evento-row"><span class="evento-min">${e.min}'</span><span>${e.icon}</span><span>${e.desc}</span></div>`).join('')||'<div class="empty-state"><div class="empty-state-text">Sem eventos</div></div>';
+  document.getElementById('eventos-list').innerHTML=[...jogoState.eventos].reverse().slice(0,30).map((e,i)=>{
+    const realIdx=jogoState.eventos.length-1-i;
+    return`<div class="evento-row" style="justify-content:space-between"><div style="display:flex;gap:8px;align-items:center"><span class="evento-min">${e.min}'</span><span>${e.icon}</span><span>${e.desc}</span></div><button onclick="removerEvento(${realIdx})" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:14px;padding:0 4px;flex-shrink:0" title="Remover">×</button></div>`;
+  }).join('')||'<div class="empty-state"><div class="empty-state-text">Sem eventos</div></div>';
   const dur=parseInt(document.getElementById('jogo-dur')?.value||50)*60;
   document.getElementById('jogo-tempos').innerHTML=jogs.length?[...jogs].sort((a,b)=>(jogoState.tempos[b.id]||0)-(jogoState.tempos[a.id]||0)).map(j=>{const t=jogoState.tempos[j.id]||0,pct=Math.min(Math.round(t/dur*100),100),mins=Math.floor(t/60);return`<div class="bar-row"><div class="bar-label">${j.nome.split(' ')[0]}</div><div class="bar-track"><div class="bar-fill fill-green" style="width:${pct}%"></div></div><div class="bar-val">${mins}'</div></div>`;}).join(''):'';
 
@@ -2230,6 +2233,27 @@ function confirmarEvento(){
   document.getElementById('sc-away').textContent=jogoState.scoreA;
 }
 
+// ═══ REMOVER EVENTO ═══
+function removerEvento(idx){
+  const e=jogoState.eventos[idx];if(!e)return;
+  if(!confirm('Remover este evento: '+e.desc+'?'))return;
+  // Reverter efeitos
+  if(e.tipo==='golo'){
+    jogoState.scoreH=Math.max(0,jogoState.scoreH-1);
+    if(e.jid&&jogoState.golosJog[e.jid])jogoState.golosJog[e.jid]=Math.max(0,jogoState.golosJog[e.jid]-1);
+  } else if(e.tipo==='golo-s'){
+    jogoState.scoreA=Math.max(0,jogoState.scoreA-1);
+  } else if(e.tipo==='defesa'){
+    jogoState.defesas=Math.max(0,jogoState.defesas-1);
+    if(e.jid&&jogoState.defesasJog[e.jid])jogoState.defesasJog[e.jid]=Math.max(0,jogoState.defesasJog[e.jid]-1);
+  }
+  jogoState.eventos.splice(idx,1);
+  document.getElementById('sc-home').textContent=jogoState.scoreH;
+  document.getElementById('sc-away').textContent=jogoState.scoreA;
+  renderJogoAoVivo();
+  toast('🗑️ Evento removido');
+}
+
 // ═══ JOGOS GUARDADOS ═══
 async function guardarJogo(){
   if(!confirm('Guardar jogo atual?'))return;
@@ -2242,6 +2266,7 @@ async function guardarJogo(){
     num_partes:jogoState.numPartes,dur_parte:jogoState.durParte,
     eventos:jogoState.eventos,tempos:jogoState.tempos,
     power_plays:jogoState.powerPlays,defesas:jogoState.defesas,
+    golos_jog:jogoState.golosJog,defesas_jog:jogoState.defesasJog,
     convocados:jogoState.emCampo
   };
   const {error}=await sb.from('jogos').insert(jogo);
@@ -2277,6 +2302,7 @@ function renderHistoricoJogos(){
           ${ppC.length?`<span style="color:#DC2626;font-size:11px">🛡️${ppCKill}/${ppC.length}</span>`:''}
           <span style="color:#2563EB;font-size:11px">🛡️${j.defesas||0}</span>
           <button class="btn btn-sm" onclick="verJogo('${j.id}')">👁 Ver</button>
+          <button class="btn btn-sm" style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE" onclick="gerarPDFJogoHistorico('${j.id}')">⬇ PDF</button>
           <button class="btn btn-sm" style="color:#DC2626" onclick="apagarJogo('${j.id}')">×</button>
         </div>
       </div>`;
@@ -2292,10 +2318,112 @@ function verJogo(id){
   const ppCGolo=ppC.filter(x=>x.goloNoPP).length;
   const ppCKill=ppC.length?Math.round((ppC.length-ppCGolo)/ppC.length*100):0;
   const tempos=j.tempos||{};
+  const durTotal=(j.num_partes||2)*(j.dur_parte||15)*60;
   const jogadores=DB.jogadores.filter(x=>Object.keys(tempos).includes(x.id)).sort((a,b)=>(tempos[b.id]||0)-(tempos[a.id]||0));
-  const linhas=['📊 '+j.adversario+' — '+fmtDate(j.data),'','⚽ Resultado: ADB '+j.score_h+' — '+j.score_a+' '+j.adversario,'🛡️ Defesas GR: '+(j.defesas||0),'⚡ PP a Favor: '+ppF.length+' ('+ppFGolo+' golos — '+ppFEfic+'% eficácia)','⚡ PP Contra: '+ppC.length+' ('+ppCGolo+' sofridos — '+ppCKill+'% kill)','','⏱ Tempo de jogo:'].concat(jogadores.map(jg=>jg.nome+': '+Math.floor((tempos[jg.id]||0)/60)+"'"));
-  alert(linhas.join('\n'));
+  const golosJog=j.golos_jog||{};
+  const defesasJog=j.defesas_jog||{};
+  const eventos=j.eventos||[];
+  const goloEvs=eventos.filter(e=>e.tipo==='golo');
+  const subEvs=eventos.filter(e=>e.tipo==='sub');
+  // Gráfico de barras de tempo em campo
+  const barrasHtml=jogadores.length?jogadores.map(jg=>{
+    const t=tempos[jg.id]||0,pct=Math.min(Math.round(t/durTotal*100),100),mins=Math.floor(t/60);
+    const golos=golosJog[jg.id]||0;
+    return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px">
+      <div style="width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${jg.nome.split(' ')[0]}</div>
+      <div style="flex:1;background:var(--gray-100);border-radius:4px;height:10px"><div style="width:${pct}%;background:#10B981;height:10px;border-radius:4px"></div></div>
+      <div style="width:28px;text-align:right;color:var(--gray-600)">${mins}'</div>
+      ${golos?`<div style="color:var(--red);font-weight:700">⚽×${golos}</div>`:'<div style="width:32px"></div>'}
+    </div>`;
+  }).join(''):'';
+  // GR defesas
+  const grDefHtml=Object.entries(defesasJog).map(([jid,n])=>{const jg=DB.jogadores.find(x=>x.id===jid);return jg?`<span style="font-weight:700">${jg.nome.split(' ')[0]}</span> ×${n}`:''}).filter(Boolean).join(', ')||'—';
+  // Golos por minuto
+  const golosMinsHtml=goloEvs.map(e=>{const jg=e.jid?DB.jogadores.find(x=>x.id===e.jid):null;return`<div style="padding:3px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span style="color:var(--gray-400);font-size:11px">${e.min}'</span> ⚽ <strong>${jg?jg.nome.split(' ')[0]:'—'}</strong></div>`;}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sem golos</div>';
+  // Substituições
+  const subHtml=subEvs.map(e=>`<div style="padding:3px 0;font-size:11px;color:var(--gray-600)"><span style="color:var(--gray-400)">${e.min}'</span> 🔄 ${e.desc}</div>`).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sem substituições</div>';
+
+  // Modal rico
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
+  modal.innerHTML=`<div style="background:#fff;border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--red)">${j.adversario}</div>
+        <div style="font-size:12px;color:var(--gray-500)">${fmtDate(j.data)} · ${j.grupo}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="gerarPDFJogoHistorico('${id}')" style="background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px">⬇ PDF</button>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400)">✕</button>
+      </div>
+    </div>
+    <!-- Resultado -->
+    <div style="text-align:center;padding:12px;background:var(--gray-50);border-radius:10px;margin-bottom:14px">
+      <div style="font-size:36px;font-weight:900;color:var(--red)">${j.score_h} — ${j.score_a}</div>
+      <div style="font-size:12px;color:var(--gray-500)">ADB Campo vs ${j.adversario}</div>
+    </div>
+    <!-- Métricas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:var(--gray-50);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:18px;font-weight:700;color:#2563EB">${j.defesas||0}</div>
+        <div style="font-size:10px;color:var(--gray-500)">Defesas GR</div>
+        <div style="font-size:10px;color:var(--gray-400)">${grDefHtml}</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:18px;font-weight:700;color:#059669">${ppF.length} (${ppFEfic}%)</div>
+        <div style="font-size:10px;color:var(--gray-500)">PP Favor</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:18px;font-weight:700;color:#DC2626">${ppC.length} (kill ${ppCKill}%)</div>
+        <div style="font-size:10px;color:var(--gray-500)">PP Contra</div>
+      </div>
+    </div>
+    <!-- Tempo em campo -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:8px">⏱ Tempo em Campo</div>
+      ${barrasHtml}
+    </div>
+    <!-- Golos -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:6px">⚽ Golos</div>
+      ${golosMinsHtml}
+    </div>
+    <!-- Substituições -->
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:6px">🔄 Substituições</div>
+      ${subHtml}
+    </div>
+  </div>`;
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+  document.body.appendChild(modal);
 }
+function gerarPDFJogoHistorico(id){
+  const j=(DB.jogos||[]).find(x=>x.id===id);if(!j)return;
+  // Substituir temporariamente jogoState pelos dados do jogo guardado
+  const savedState={...jogoState};
+  jogoState.scoreH=j.score_h;
+  jogoState.scoreA=j.score_a;
+  jogoState.eventos=j.eventos||[];
+  jogoState.tempos=j.tempos||{};
+  jogoState.powerPlays=j.power_plays||{favor:{lista:[]},contra:{lista:[]}};
+  jogoState.defesas=j.defesas||0;
+  jogoState.golosJog=j.golos_jog||{};
+  jogoState.defesasJog=j.defesas_jog||{};
+  jogoState.grupo=j.grupo;
+  jogoState.numPartes=j.num_partes||2;
+  jogoState.durParte=j.dur_parte||15;
+  // Temporariamente pôr adversário no input
+  const advInp=document.getElementById('jogo-adv-inp');
+  const advOld=advInp?advInp.value:'';
+  if(advInp)advInp.value=j.adversario;
+  gerarPDFJogo();
+  // Restaurar
+  setTimeout(()=>{
+    Object.assign(jogoState,savedState);
+    if(advInp)advInp.value=advOld;
+  },500);
+}
+
 async function apagarJogo(id){
   if(!confirm('Apagar jogo?'))return;
   await sb.from('jogos').delete().eq('id',id);
