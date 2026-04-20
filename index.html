@@ -933,6 +933,24 @@ function getSubsForGrupo(g){
 }
 function jogsDoGrupo(g){return DB.jogadores.filter(j=>getSubsForGrupo(g).includes(j.sub));}
 function sessDoGrupo(g){return DB.sessoes.filter(s=>s.grupo===g);}
+// Stats de jogo de um jogador a partir do histórico
+function statsJogoJogador(jid){
+  const jogos=DB.jogos||[];
+  let numJogos=0,totalMinutos=0,totalGolos=0,totalDefesas=0;
+  jogos.forEach(j=>{
+    const tempos=j.tempos||{};
+    const golosJog=j.golos_jog||{};
+    const defesasJog=j.defesas_jog||{};
+    if(tempos[jid]!==undefined){
+      numJogos++;
+      totalMinutos+=Math.floor((tempos[jid]||0)/60);
+      totalGolos+=(golosJog[jid]||0);
+      totalDefesas+=(defesasJog[jid]||0);
+    }
+  });
+  return{numJogos,totalMinutos,totalGolos,totalDefesas};
+}
+
 function statsJogador(j,sess){
   const c={P:0,FCA:0,FSA:0,L:0};
   let qualSum=0,qualCount=0;
@@ -1291,6 +1309,36 @@ function renderFicha(){
           <tr><td style="color:var(--gray-500)">Obs.</td><td>${j.obs||'—'}</td></tr>
         </tbody></table>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-title">⚽ Estatísticas de Jogo</div>
+      ${(()=>{
+        const sj=statsJogoJogador(j.id);
+        if(!sj.numJogos) return '<div style="font-size:12px;color:var(--gray-400);text-align:center;padding:8px">Sem jogos registados ainda</div>';
+        return`<div class="metrics-grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="metric-card"><div class="metric-label">Jogos</div><div class="metric-value">${sj.numJogos}</div></div>
+          <div class="metric-card"><div class="metric-label">Minutos</div><div class="metric-value">${sj.totalMinutos}'</div></div>
+          <div class="metric-card"><div class="metric-label">Golos</div><div class="metric-value" style="color:var(--red)">${sj.totalGolos}</div></div>
+          <div class="metric-card"><div class="metric-label">Defesas GR</div><div class="metric-value" style="color:#2563EB">${sj.totalDefesas}</div></div>
+        </div>
+        <div style="margin-top:10px">
+          ${(DB.jogos||[]).filter(jg=>(jg.tempos||{})[j.id]!==undefined).sort((a,b)=>b.data.localeCompare(a.data)).slice(0,5).map(jg=>{
+            const mins=Math.floor((jg.tempos[j.id]||0)/60);
+            const golos=(jg.golos_jog||{})[j.id]||0;
+            const defesas=(jg.defesas_jog||{})[j.id]||0;
+            const res=jg.score_h>jg.score_a?'badge-ok':jg.score_h<jg.score_a?'badge-danger':'badge-gray';
+            return`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--gray-100);font-size:12px">
+              <div><strong>\${jg.adversario}</strong> <span style="color:var(--gray-400);font-size:11px">\${fmtDate(jg.data)}</span></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="badge \${res}">\${jg.score_h}—\${jg.score_a}</span>
+                <span style="color:var(--gray-500)">\${mins}'</span>
+                \${golos?'<span style="color:var(--red);font-weight:700">⚽×'+golos+'</span>':''}
+                \${defesas?'<span style="color:#2563EB;font-weight:700">🛡️×'+defesas+'</span>':''}
+              </div>
+            </div>`;
+          }).join('')||''}
+        </div>`;
+      })()}
     </div>
     <div class="card">
       <div class="card-title">Evolução mensal — presenças por mês</div>
@@ -2939,6 +2987,57 @@ async function gerarPDFJogador(){
     y+=chartH2+16;
   }
 
+
+  // ── Estatísticas de Jogo ──
+  const sj=statsJogoJogador(j.id);
+  if(sj.numJogos>0){
+    checkY(30);
+    doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(0,0,0);
+    doc.text('Estatisticas de Jogo',margin,y);
+    doc.setDrawColor(...RED);doc.setLineWidth(0.4);doc.line(margin,y+1,W-margin,y+1);
+    y+=8;
+    // 4 métricas
+    const sjMets=[
+      {label:'Jogos',val:String(sj.numJogos),color:GRAY},
+      {label:'Minutos',val:sj.totalMinutos+"'",color:GREEN},
+      {label:'Golos',val:String(sj.totalGolos),color:RED},
+      {label:'Defesas GR',val:String(sj.totalDefesas),color:[37,99,235]}
+    ];
+    const smW=(cW-9)/4;
+    sjMets.forEach(function(m,i){
+      const mx=margin+i*(smW+3);
+      doc.setFillColor(...LGRAY);doc.roundedRect(mx,y,smW,14,2,2,'F');
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+      doc.text(m.label,mx+smW/2,y+5,{align:'center'});
+      doc.setFontSize(11);doc.setFont('helvetica','bold');doc.setTextColor(...m.color);
+      doc.text(m.val,mx+smW/2,y+11,{align:'center'});
+    });
+    y+=18;
+    // Últimos jogos
+    const ultimosJogos=(DB.jogos||[]).filter(jg=>(jg.tempos||{})[j.id]!==undefined).sort((a,b)=>b.data.localeCompare(a.data)).slice(0,5);
+    if(ultimosJogos.length){
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(0,0,0);
+      doc.text('Ultimos jogos',margin,y);y+=5;
+      ultimosJogos.forEach(function(jg){
+        if(y>272){doc.addPage();y=16;}
+        const mins=Math.floor((jg.tempos[j.id]||0)/60);
+        const golos=(jg.golos_jog||{})[j.id]||0;
+        const defesas=(jg.defesas_jog||{})[j.id]||0;
+        const resColor=jg.score_h>jg.score_a?GREEN:jg.score_h<jg.score_a?RED:GRAY;
+        doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(0,0,0);
+        doc.text(jg.adversario,margin+2,y);
+        doc.setTextColor(...GRAY);doc.text(fmtDate(jg.data),margin+55,y);
+        doc.setTextColor(...resColor);doc.setFont('helvetica','bold');
+        doc.text(jg.score_h+'—'+jg.score_a,margin+90,y);
+        doc.setTextColor(...GRAY);doc.setFont('helvetica','normal');
+        doc.text(mins+"'",margin+105,y);
+        if(golos>0){doc.setTextColor(...RED);doc.text('⚽×'+golos,margin+118,y);}
+        if(defesas>0){doc.setTextColor(37,99,235);doc.text('🛡️×'+defesas,margin+133,y);}
+        y+=5;
+      });
+    }
+    y+=4;
+  }
 
   // ── Avaliacao tecnica ──
   const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&d.nome===j.nome);
