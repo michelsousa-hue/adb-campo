@@ -2718,9 +2718,9 @@ async function saveTreino(){
       const blob=new Blob([arr],{type:treinoFileMime});
       const ext=treinoFileMime==='application/pdf'?'pdf':treinoFileMime.split('/')[1]||'jpg';
       const path='treinos/'+uid()+'.'+ext;
-      const {data:upData,error:upErr}=await sb.storage.from('treinos').upload(path,blob,{contentType:treinoFileMime,upsert:false});
+      const {data:upData,error:upErr}=await sb.storage.from('Treinos').upload(path,blob,{contentType:treinoFileMime,upsert:false});
       if(!upErr){
-        const {data:urlData}=sb.storage.from('treinos').getPublicUrl(path);
+        const {data:urlData}=sb.storage.from('Treinos').getPublicUrl(path);
         ficheiro_url=urlData.publicUrl;
         ficheiro_mime=treinoFileMime;
       } else {
