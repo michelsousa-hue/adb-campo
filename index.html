@@ -228,6 +228,7 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div class="nav-item" data-page="presencas"><span class="nav-icon">✅</span>Presenças</div>
       <div class="nav-item" data-page="jogadores"><span class="nav-icon">👥</span>Jogadores</div>
       <div class="nav-item" data-page="sessoes"><span class="nav-icon">📅</span>Sessões</div>
+      <div class="nav-item" data-page="treinos"><span class="nav-icon">📋</span>Treinos</div>
       <div class="nav-section">Análise</div>
       <div class="nav-item" data-page="ficha"><span class="nav-icon">📋</span>Ficha Individual</div>
       <div class="nav-item" data-page="avaliacao"><span class="nav-icon">⭐</span>Avaliação Técnica</div>
@@ -316,6 +317,15 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div id="aval-registo" class="aval-view" style="display:none"></div>
         <div id="aval-evolucao" class="aval-view" style="display:none"></div>
       </div>
+      <div id="page-treinos" class="page">
+        <div class="page-header">
+          <div><div class="page-title">Unidades de Treino</div></div>
+          <button class="btn btn-primary" onclick="openModalTreino()">+ Nova Unidade</button>
+        </div>
+        <div class="grupo-tabs" id="treinos-gtabs"></div>
+        <div id="treinos-list"></div>
+      </div>
+
       <div id="page-relatorio" class="page">
         <div class="page-header"><div class="page-title">Relatório</div></div>
         <div class="grupo-tabs" id="rel-gtabs"></div>
@@ -562,6 +572,29 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<div id="modal-treino" class="modal-bg">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><span class="modal-title" id="modal-treino-title">Nova Unidade de Treino</span><button class="modal-close" onclick="closeModal('modal-treino')">✕</button></div>
+    <input type="hidden" id="treino-edit-id">
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:10px"><label class="form-label">Data</label><input type="date" class="form-input" id="treino-data"></div>
+      <div class="form-group" style="margin-bottom:10px"><label class="form-label">Escalão</label><select class="form-input" id="treino-grupo"></select></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Título / Descrição</label><input type="text" class="form-input" id="treino-titulo" placeholder="ex: Treino técnico — passe e remate"></div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Ficheiro (imagem ou PDF)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <button type="button" class="btn" onclick="document.getElementById('treino-file-input').click()" style="font-size:13px">📁 Escolher ficheiro</button>
+        <button type="button" class="btn" onclick="document.getElementById('treino-camera-input').click()" style="font-size:13px">📷 Câmara</button>
+      </div>
+      <input type="file" id="treino-file-input" accept="image/*,.pdf" style="display:none" onchange="onTreinoFile(this)">
+      <input type="file" id="treino-camera-input" accept="image/*" capture="environment" style="display:none" onchange="onTreinoFile(this)">
+      <div id="treino-file-preview" style="margin-top:8px;font-size:12px;color:var(--gray-500)"></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveTreino()">Guardar Unidade</button>
+  </div>
+</div>
+
 <div id="modal-subir-escalao" class="modal-bg">
   <div class="modal" style="max-width:520px">
     <div class="modal-header"><span class="modal-title">⬆️ Subir Escalão</span><button class="modal-close" onclick="closeModal('modal-subir-escalao')">✕</button></div>
@@ -657,7 +690,7 @@ const COMPS = [
 ];
 
 // ═══ STATE ═══
-let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'}, delegados:[] };
+let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'}, delegados:[], treinos:[] };
 let jogoState = { scoreH:0, scoreA:0, eventos:[], emCampo:[], tempos:{}, timerSec:0, running:false, paused:false, grupo:'Sub13+Sub15', numPartes:2, durParte:15, parteAtual:1, parteIniciada:false, powerPlays:{ favor:{ ativo:false, inicio:null, lista:[] }, contra:{ ativo:false, inicio:null, lista:[] } }, defesas:0, defesasJog:{}, golosJog:{}, convocados:[] };
 let currentUser = null;
 let currentPin = '';
@@ -698,13 +731,14 @@ async function loadAllData(){
   _loadingData = true;
   showLoading(true);
   try {
-    const [jogsR, sessR, avalR, cfgR, jogosR, delegR] = await Promise.all([
+    const [jogsR, sessR, avalR, cfgR, jogosR, delegR, treinosR] = await Promise.all([
       sb.from('jogadores').select('*').order('nome'),
       sb.from('sessoes').select('*').order('data',{ascending:false}),
       sb.from('avaliacoes').select('*'),
       sb.from('config').select('*'),
       sb.from('jogos').select('*').order('data',{ascending:false}),
       sb.from('delegados').select('*'),
+      sb.from('treinos').select('*').order('data',{ascending:false}),
     ]);
     // Deduplicate jogadores by id (fix for repeated players bug)
     const rawJogs = jogsR.data || [];
@@ -733,6 +767,7 @@ async function loadAllData(){
     // Jogos
     DB.jogos = jogosR.data || [];
     DB.delegados = delegR?.data || [];
+    DB.treinos = treinosR?.data || [];
     // Config
     (cfgR.data||[]).forEach(c=>{
       if(c.key==='pins') DB.config.pins=JSON.parse(c.value);
@@ -913,7 +948,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
   });
 });
 function renderPage(p){
-  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin};
+  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos};
   if(map[p])map[p]();
 }
 function buildGrupoTabs(cid,pageKey){
@@ -2589,6 +2624,133 @@ async function confirmarSubirEscalao(){
   toast('✅ '+selecionados.length+' jogador(es) atualizados para '+novoSub+'!');
   showSync();
   renderPage(currentPage);
+}
+
+// ═══ TREINOS ═══
+let treinoFileB64 = null;
+let treinoFileMime = null;
+let currentGrupoTreinos = GRUPOS[0]||'Sub9+Sub11';
+
+function renderTreinos(){
+  // Tabs de grupo
+  const tabs=document.getElementById('treinos-gtabs');
+  if(tabs){
+    tabs.innerHTML=GRUPOS.map(g=>`<div class="gtab ${currentGrupoTreinos===g?'active':''}" onclick="setGrupoTreinos('${g}')">${g}</div>`).join('');
+  }
+  // Preencher select do modal
+  const sel=document.getElementById('treino-grupo');
+  if(sel){sel.innerHTML=GRUPOS.map(g=>`<option${currentGrupoTreinos===g?' selected':''}>${g}</option>`).join('');}
+  // Lista
+  const el=document.getElementById('treinos-list');if(!el)return;
+  const lista=(DB.treinos||[]).filter(t=>t.grupo===currentGrupoTreinos).sort((a,b)=>b.data.localeCompare(a.data));
+  if(!lista.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Sem unidades de treino para este escalão</div></div>';
+    return;
+  }
+  el.innerHTML=lista.map(t=>`
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px;color:var(--gray-900)">${t.titulo||'Unidade de treino'}</div>
+          <div style="font-size:12px;color:var(--gray-500);margin-top:2px">${fmtDate(t.data)} · ${t.grupo}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          ${t.ficheiro_url?`<button class="btn btn-sm" onclick="verTreinoFicheiro('${t.id}')" style="color:#2563EB">👁 Ver</button>`:''}
+          <button class="btn btn-sm" onclick="deleteTreino('${t.id}')" style="color:#DC2626;border-color:#FCA5A5">🗑️</button>
+        </div>
+      </div>
+      ${t.ficheiro_url&&t.ficheiro_mime&&t.ficheiro_mime.startsWith('image/')?
+        `<img src="${t.ficheiro_url}" style="width:100%;max-height:280px;object-fit:contain;border-radius:8px;margin-top:10px;background:#f9fafb" alt="Unidade de treino">`:
+        t.ficheiro_url?`<div style="margin-top:10px;padding:10px;background:var(--gray-50);border-radius:8px;font-size:12px;color:var(--gray-500)">📄 PDF anexado — clica em Ver para abrir</div>`:''}
+    </div>`).join('');
+}
+
+function setGrupoTreinos(g){
+  currentGrupoTreinos=g;
+  renderTreinos();
+}
+
+function openModalTreino(){
+  treinoFileB64=null;treinoFileMime=null;
+  document.getElementById('treino-edit-id').value='';
+  document.getElementById('modal-treino-title').textContent='Nova Unidade de Treino';
+  document.getElementById('treino-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('treino-titulo').value='';
+  document.getElementById('treino-file-preview').innerHTML='';
+  // Sync select com grupo atual
+  const sel=document.getElementById('treino-grupo');
+  if(sel){sel.innerHTML=GRUPOS.map(g=>`<option${currentGrupoTreinos===g?' selected':''}>${g}</option>`).join('');}
+  openModal('modal-treino');
+}
+
+function onTreinoFile(input){
+  const file=input.files[0];if(!file)return;
+  const preview=document.getElementById('treino-file-preview');
+  preview.textContent='A carregar...';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    treinoFileB64=e.target.result; // data URL completo
+    treinoFileMime=file.type;
+    if(file.type.startsWith('image/')){
+      preview.innerHTML=`<img src="${treinoFileB64}" style="max-width:100%;max-height:160px;border-radius:6px;margin-top:4px"><div style="margin-top:4px">${file.name}</div>`;
+    } else {
+      preview.innerHTML=`<div style="padding:8px;background:var(--gray-50);border-radius:6px;margin-top:4px">📄 ${file.name}</div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveTreino(){
+  const titulo=document.getElementById('treino-titulo').value.trim();
+  const data=document.getElementById('treino-data').value;
+  const grupo=document.getElementById('treino-grupo').value;
+  if(!titulo){alert('Introduz um título para a unidade');return;}
+  if(!data){alert('Seleciona a data');return;}
+  showLoading(true);
+  let ficheiro_url=null,ficheiro_mime=null;
+  // Upload para Supabase Storage se houver ficheiro
+  if(treinoFileB64){
+    try{
+      const base64=treinoFileB64.split(',')[1];
+      const byteStr=atob(base64);
+      const arr=new Uint8Array(byteStr.length);
+      for(let i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
+      const blob=new Blob([arr],{type:treinoFileMime});
+      const ext=treinoFileMime==='application/pdf'?'pdf':treinoFileMime.split('/')[1]||'jpg';
+      const path='treinos/'+uid()+'.'+ext;
+      const {data:upData,error:upErr}=await sb.storage.from('treinos').upload(path,blob,{contentType:treinoFileMime,upsert:false});
+      if(!upErr){
+        const {data:urlData}=sb.storage.from('treinos').getPublicUrl(path);
+        ficheiro_url=urlData.publicUrl;
+        ficheiro_mime=treinoFileMime;
+      } else {
+        console.warn('Upload erro:',upErr.message);
+        toast('⚠️ Erro ao carregar ficheiro: '+upErr.message);
+      }
+    }catch(err){console.warn('Upload err:',err);}
+  }
+  const rec={id:uid(),titulo,data,grupo,ficheiro_url,ficheiro_mime,criado_em:new Date().toISOString()};
+  await sb.from('treinos').insert(rec);
+  DB.treinos=DB.treinos||[];
+  DB.treinos.push(rec);
+  showLoading(false);
+  closeModal('modal-treino');
+  toast('✅ Unidade de treino guardada!');
+  currentGrupoTreinos=grupo;
+  renderTreinos();
+}
+
+function verTreinoFicheiro(id){
+  const t=(DB.treinos||[]).find(x=>x.id===id);if(!t||!t.ficheiro_url)return;
+  window.open(t.ficheiro_url,'_blank');
+}
+
+async function deleteTreino(id){
+  if(!confirm('Apagar esta unidade de treino?'))return;
+  await sb.from('treinos').delete().eq('id',id);
+  DB.treinos=(DB.treinos||[]).filter(x=>x.id!==id);
+  toast('🗑️ Unidade apagada');
+  renderTreinos();
 }
 
 function renderAdminMesa(){
