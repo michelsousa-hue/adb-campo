@@ -711,7 +711,22 @@ textarea.form-input{resize:vertical;min-height:70px}
       </div>
     </div>
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Título</label><input type="text" class="form-input" id="met-titulo" placeholder="ex: Princípios defensivos"></div>
-    <div class="form-group" style="margin-bottom:16px"><label class="form-label">Conteúdo</label><textarea class="form-input" id="met-conteudo" style="min-height:160px;resize:vertical" placeholder="Descreve o conteúdo desta secção…"></textarea></div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Conteúdo</label><textarea class="form-input" id="met-conteudo" style="min-height:120px;resize:vertical" placeholder="Descreve o conteúdo desta secção…"></textarea></div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Ficheiro (PDF, imagem ou câmara)</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <label class="btn" style="cursor:pointer;flex:1;text-align:center">
+          📄 PDF / Imagem
+          <input type="file" id="met-file-input" accept="image/*,application/pdf" style="display:none" onchange="onMetFile(this)">
+        </label>
+        <label class="btn" style="cursor:pointer;flex:1;text-align:center">
+          📷 Câmara
+          <input type="file" id="met-cam-input" accept="image/*" capture="environment" style="display:none" onchange="onMetFile(this)">
+        </label>
+      </div>
+      <div id="met-file-preview" style="font-size:12px;color:var(--gray-500)"></div>
+      <div id="met-file-current" style="font-size:11px;color:var(--gray-400);margin-top:4px"></div>
+    </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" style="flex:1" onclick="saveMetodologia()">💾 Guardar</button>
       <button class="btn" onclick="closeModal('modal-metodologia')">Cancelar</button>
@@ -2820,6 +2835,9 @@ async function deleteTreino(id){
 
 // ═══ METODOLOGIA ═══
 let currentMetCat = 'todas';
+let metFileB64 = null;
+let metFileMime = null;
+let metFileRemoved = false;
 
 const MET_CATS = {
   todas:      {label:'Todas',        emoji:'📚', cls:''},
@@ -2884,7 +2902,10 @@ function renderMetodologia(){
         </div>
         ${editBtns}
       </div>
-      <div class="met-card-body">${s.conteudo||''}</div>
+      ${s.conteudo?`<div class="met-card-body">${s.conteudo}</div>`:''}
+      ${s.ficheiro_url&&s.ficheiro_mime&&s.ficheiro_mime.startsWith('image/')?
+        `<div style="padding:0 16px 12px"><img src="${s.ficheiro_url}" style="width:100%;max-height:220px;object-fit:contain;border-radius:8px;background:var(--gray-50)" alt="${s.titulo}"></div>`:
+        s.ficheiro_url?`<div style="padding:0 16px 12px"><button class="btn btn-sm" onclick="window.open('${s.ficheiro_url}','_blank')" style="color:#2563EB;border-color:#BFDBFE">👁 Ver PDF</button></div>`:''}
       <div class="met-card-footer">
         <span>📅 ${data}</span>
         <span>${s.autor||''}</span>
@@ -2898,16 +2919,55 @@ function setMetCat(cat){
   renderMetodologia();
 }
 
+function onMetFile(input){
+  const file=input.files[0];if(!file)return;
+  const preview=document.getElementById('met-file-preview');
+  preview.textContent='A carregar...';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    metFileB64=e.target.result;
+    metFileMime=file.type;
+    metFileRemoved=false;
+    if(file.type.startsWith('image/')){
+      preview.innerHTML=`<img src="${metFileB64}" style="max-width:100%;max-height:160px;border-radius:6px;margin-top:4px"><div style="margin-top:4px;color:var(--gray-500)">${file.name}</div>`;
+    } else {
+      preview.innerHTML=`<div style="padding:8px;background:var(--gray-50);border-radius:6px;margin-top:4px">📄 ${file.name}</div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeMetFicheiro(){
+  metFileRemoved=true;
+  metFileB64=null;metFileMime=null;
+  document.getElementById('met-file-current').innerHTML='<span style="font-size:11px;color:#DC2626">Ficheiro será removido ao guardar</span>';
+  document.getElementById('met-file-preview').innerHTML='';
+  document.getElementById('met-file-input').value='';
+  document.getElementById('met-cam-input').value='';
+}
+
 function openModalMetodologia(id){
   const isCoord=!currentUser?.grupos;
   if(!isCoord){toast('Apenas o coordenador pode editar a metodologia.');return;}
   const s=id?(DB.metodologia||[]).find(x=>x.id===id):null;
+  metFileB64=null;metFileMime=null;metFileRemoved=false;
   document.getElementById('met-edit-id').value=id||'';
   document.getElementById('modal-met-title').textContent=s?'Editar Secção':'Nova Secção';
   document.getElementById('met-emoji').value=s?s.emoji||'':'';
   document.getElementById('met-categoria').value=s?s.categoria||'metodologia':'metodologia';
   document.getElementById('met-titulo').value=s?s.titulo||'':'';
   document.getElementById('met-conteudo').value=s?s.conteudo||'':'';
+  document.getElementById('met-file-preview').innerHTML='';
+  document.getElementById('met-file-input').value='';
+  document.getElementById('met-cam-input').value='';
+  // Mostrar ficheiro existente
+  const cur=document.getElementById('met-file-current');
+  if(s&&s.ficheiro_url){
+    const preview=s.ficheiro_mime&&s.ficheiro_mime.startsWith('image/')?
+      `<img src="${s.ficheiro_url}" style="max-width:100%;max-height:120px;border-radius:6px;display:block;margin-bottom:6px">`:
+      `<div style="padding:6px 8px;background:var(--gray-50);border-radius:6px;margin-bottom:6px">📄 Ficheiro atual — <a href="${s.ficheiro_url}" target="_blank" style="color:var(--blue)">ver</a></div>`;
+    cur.innerHTML=preview+`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="removeMetFicheiro()">× Remover ficheiro</button>`;
+  } else { cur.innerHTML=''; }
   openModal('modal-metodologia');
 }
 
@@ -2921,13 +2981,39 @@ async function saveMetodologia(){
   const conteudo=document.getElementById('met-conteudo').value.trim();
   const editId=document.getElementById('met-edit-id').value;
   showLoading(true);
+  // Upload ficheiro se houver novo
+  let ficheiro_url=null,ficheiro_mime=null;
+  if(metFileB64){
+    try{
+      const base64=metFileB64.split(',')[1];
+      const byteStr=atob(base64);
+      const arr=new Uint8Array(byteStr.length);
+      for(let i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
+      const blob=new Blob([arr],{type:metFileMime});
+      const ext=metFileMime==='application/pdf'?'pdf':metFileMime.split('/')[1]||'jpg';
+      const path='metodologia/'+uid()+'.'+ext;
+      const {data:upData,error:upErr}=await sb.storage.from('Treinos').upload(path,blob,{contentType:metFileMime,upsert:false});
+      if(!upErr){
+        const {data:urlData}=sb.storage.from('Treinos').getPublicUrl(path);
+        ficheiro_url=urlData.publicUrl;
+        ficheiro_mime=metFileMime;
+      } else {
+        console.warn('Upload erro:',upErr.message);
+        toast('⚠️ Erro ao carregar ficheiro: '+upErr.message);
+      }
+    }catch(err){console.warn('Upload err:',err);}
+  }
   if(editId){
-    const rec={titulo,emoji,categoria,conteudo};
+    const existing=(DB.metodologia||[]).find(x=>x.id===editId);
+    const rec={titulo,emoji,categoria,conteudo,
+      ficheiro_url: metFileRemoved ? null : (ficheiro_url!==null ? ficheiro_url : (existing?.ficheiro_url||null)),
+      ficheiro_mime: metFileRemoved ? null : (ficheiro_mime!==null ? ficheiro_mime : (existing?.ficheiro_mime||null))
+    };
     await sb.from('metodologia').update(rec).eq('id',editId);
     const idx=(DB.metodologia||[]).findIndex(x=>x.id===editId);
     if(idx>=0) DB.metodologia[idx]={...DB.metodologia[idx],...rec};
   } else {
-    const rec={id:uid(),titulo,emoji,categoria,conteudo,autor:currentUser?.name||'Coordenador',criado_em:new Date().toISOString()};
+    const rec={id:uid(),titulo,emoji,categoria,conteudo,ficheiro_url,ficheiro_mime,autor:currentUser?.name||'Coordenador',criado_em:new Date().toISOString()};
     await sb.from('metodologia').insert(rec);
     DB.metodologia=DB.metodologia||[];
     DB.metodologia.unshift(rec);
