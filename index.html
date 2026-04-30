@@ -3564,14 +3564,16 @@ let _csvPendente=[];
 async function importarCSVSocios(input){
   const file=input.files[0]; if(!file) return;
   input.value='';
-  const text=await file.text();
+  // Ler com Latin-1 para suportar ficheiros exportados do Excel/Windows
+  const buffer=await file.arrayBuffer();
+  const text=new TextDecoder('windows-1252').decode(buffer);
   const lines=text.split(/\r?\n/).filter(l=>l.trim());
   if(!lines.length){toast('CSV vazio');return;}
   const sep=lines[0].includes(';')?';':',';
-  const headers=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/[^a-z0-9]/gi,''));
+  const headers=lines[0].split(sep).map(h=>h.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/gi,''));
   const rows=lines.slice(1).filter(l=>l.trim());
   const iNome=headers.findIndex(h=>h.includes('nome')||h.includes('name'));
-  const iNum=headers.findIndex(h=>h.includes('num')||h.includes('socio')||h==='id'||h==='n');
+  const iNum=headers.findIndex(h=>h.includes('num')||h.includes('n')||h==='id'||h===''||h.includes('socio'));
   if(iNome<0){toast('Coluna "nome" não encontrada no CSV');return;}
   const parse=r=>r.split(sep).map(c=>c.trim().replace(/^"|"$/g,''));
   const existentes=(DB.socios||[]).map(s=>(s.nome||'').toLowerCase().trim());
