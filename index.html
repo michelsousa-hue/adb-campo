@@ -3992,7 +3992,7 @@ async function gerarPDFSocios(){
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const W=210,margin=16,cW=W-margin*2;
     const RED=[139,26,26],GRAY=[107,114,128],LGRAY=[243,244,246],WHITE=[255,255,255],BLK=[17,24,39];
-    const clubeNome=String(DB.config?.clube_nome||'Clube');
+    const clubeNome=String(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'Clube');
     const epoca=String(DB.config?.epoca||'2025/2026');
     // Logo circular igual à ficha clínica
     const logoCircular=await makeCircularLogo(LOGO_B64,600).catch(()=>null);
