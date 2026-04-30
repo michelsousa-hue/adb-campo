@@ -3763,8 +3763,10 @@ function _renderSociosGestao(isCoord){
   }).join('');
 }
 
-function _renderSociosRapido(isCoord){
+function _renderSociosRapido(isCoord,keepSelected){
   const lista=document.getElementById('soc-rapido-lista'); if(!lista)return;
+  // Guardar IDs seleccionados antes de re-renderizar
+  const selected=keepSelected||new Set([...document.querySelectorAll('.soc-row-cb:checked')].map(cb=>cb.dataset.id));
   const filtered=_socFiltered();
   if(!filtered.length){
     lista.innerHTML=`<div style="text-align:center;padding:40px;color:var(--gray-400)"><div style="font-size:36px;margin-bottom:8px">\ud83c\udfc5</div><div>Sem resultados.</div></div>`;
@@ -3784,7 +3786,7 @@ function _renderSociosRapido(isCoord){
     const dVal=e.ultimo_pag!==undefined?e.ultimo_pag:(s.ultimo_pag||'');
     const changed=Object.keys(e).length>0;
     return`<div class="soc-rapido-row${changed?' soc-row-changed':''}">
-      <input type="checkbox" class="soc-rapido-cb soc-row-cb" data-id="${s.id}" onchange="_updateMassaBar()">
+      <input type="checkbox" class="soc-rapido-cb soc-row-cb" data-id="${s.id}" onchange="_updateMassaBar()" ${selected.has(s.id)?'checked':''}>
       <span class="soc-rapido-nome" title="${s.nome}">${s.nome}${s.num_socio?` <span style="font-size:10px;color:var(--gray-400)">#${s.num_socio}</span>`:''}</span>
       <select class="soc-rapido-select" data-id="${s.id}" data-field="estado" onchange="_onRapidoChange(this)">
         <option value="Activo" ${eVal==='Activo'?'selected':''}>Activo</option>
@@ -3836,20 +3838,21 @@ function aplicarMassa(){
   const estado=document.getElementById('soc-massa-estado').value;
   const valor=document.getElementById('soc-massa-valor').value;
   const data=document.getElementById('soc-massa-data').value;
-  if(!quota&&!estado&&!valor&&!data){toast('Define pelo menos um campo para aplicar');return;}
+  if(!quota&&!estado&&valor===''&&data===''){toast('Define pelo menos um campo para aplicar');return;}
+  const sel=new Set(cbs.map(cb=>cb.dataset.id));
   cbs.forEach(cb=>{
     const id=cb.dataset.id;
     if(!_socRapidoEdits[id]) _socRapidoEdits[id]={};
     if(quota) _socRapidoEdits[id].quota=quota;
     if(estado) _socRapidoEdits[id].estado=estado;
-    if(valor) _socRapidoEdits[id].valor=valor;
-    if(data) _socRapidoEdits[id].ultimo_pag=data;
+    if(valor!=='') _socRapidoEdits[id].valor=valor;
+    if(data!=='') _socRapidoEdits[id].ultimo_pag=data;
   });
   document.getElementById('soc-massa-quota').value='';
   document.getElementById('soc-massa-estado').value='';
   document.getElementById('soc-massa-valor').value='';
   document.getElementById('soc-massa-data').value='';
-  _renderSociosRapido(!currentUser?.grupos);
+  _renderSociosRapido(!currentUser?.grupos,sel);
   toast(`\u2705 Campos aplicados a ${cbs.length} sócio${cbs.length!==1?'s':''}. Clica "\ud83d\udcbe Guardar alterações" para confirmar.`);
 }
 
@@ -3867,7 +3870,7 @@ async function _guardarLinha(id){
   delete _socRapidoEdits[id];
   showLoading(false);
   toast('\u2705 Sócio guardado!');
-  _renderSociosRapido(!currentUser?.grupos);
+  _renderSociosRapido(!currentUser?.grupos,new Set());
 }
 
 async function guardarModoRapido(){
