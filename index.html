@@ -3987,47 +3987,60 @@ async function deleteSocio(id){
 async function gerarPDFSocios(){
   const lista=DB.socios||[];
   if(!lista.length){toast('Sem sócios para exportar');return;}
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210,margin=16,cW=W-margin*2;
-  const RED=[139,26,26],GRAY=[107,114,128],LGRAY=[243,244,246],WHITE=[255,255,255],BLK=[17,24,39];
-  doc.setFillColor(...RED);doc.rect(0,0,W,22,'F');
-  doc.setTextColor(...WHITE);doc.setFontSize(14);doc.setFont('helvetica','bold');
-  doc.text(DB.config?.clube_nome||'Clube',W/2,9,{align:'center'});
-  doc.setFontSize(8);doc.setFont('helvetica','normal');
-  doc.text('Lista de Sócios',W/2,15,{align:'center'});
-  let y=30;
-  doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...BLK);
-  doc.text('Nº / Nome',margin,y);doc.text('Estado',95,y);doc.text('Quota',135,y);doc.text('Ú. Pag.',170,y);
-  y+=3;doc.setDrawColor(...LGRAY);doc.line(margin,y,W-margin,y);y+=5;
-  doc.setFont('helvetica','normal');
-  lista.sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).forEach(s=>{
-    if(y>270){doc.addPage();y=20;}
-    const nome=(s.nome||'—').substring(0,32);
-    const estado=s.estado||'—';
-    const quota=s.quota||'—';
-    const numS=s.num_socio?`#${s.num_socio} `:'';
-    let dataPag='—';
-    try{if(s.ultimo_pag) dataPag=new Date(s.ultimo_pag).toLocaleDateString('pt-PT');}catch(e){}
-    doc.setTextColor(...BLK);doc.text(numS+nome,margin,y);
-    doc.setTextColor(estado==='Activo'?[6,95,70]:estado==='Inactivo'?[107,114,128]:[146,64,14]);
-    doc.text(estado,95,y);
-    doc.setTextColor(quota==='Paga'?[6,95,70]:quota==='Em falta'?[153,27,27]:[146,64,14]);
-    doc.text(quota,135,y);
-    doc.setTextColor(...GRAY);
-    doc.text(dataPag,170,y);
-    y+=6;
-  });
-  const pg=doc.internal.getNumberOfPages();
-  for(let i=1;i<=pg;i++){
-    doc.setPage(i);
-    doc.setFillColor(...RED);doc.rect(0,285,W,12,'F');
-    doc.setTextColor(...WHITE);doc.setFontSize(7);
-    doc.text(`${DB.config?.clube_nome||'Clube'} — Sócios`,margin,291);
-    doc.text(`Gerado ${new Date().toLocaleDateString('pt-PT')} · ${i}/${pg}`,W-margin,291,{align:'right'});
+  try{
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210,margin=16;
+    const RED=[139,26,26],GRAY=[107,114,128],LGRAY=[243,244,246],WHITE=[255,255,255],BLK=[17,24,39];
+    // Cabeçalho
+    doc.setFillColor(...RED);doc.rect(0,0,W,22,'F');
+    doc.setTextColor(...WHITE);doc.setFontSize(14);doc.setFont('helvetica','bold');
+    doc.text(String(DB.config?.clube_nome||'Clube'),W/2,9,{align:'center'});
+    doc.setFontSize(8);doc.setFont('helvetica','normal');
+    doc.text('Lista de Sócios',W/2,15,{align:'center'});
+    // Cabeçalho tabela
+    let y=30;
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...BLK);
+    doc.text('Nº / Nome',margin,y);doc.text('Estado',95,y);doc.text('Quota',135,y);doc.text('Ú. Pag.',170,y);
+    y+=3;doc.setDrawColor(...LGRAY);doc.line(margin,y,W-margin,y);y+=5;
+    doc.setFont('helvetica','normal');
+    // Linhas
+    const sorted=[...lista].sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||'')));
+    for(const s of sorted){
+      if(y>270){doc.addPage();y=20;}
+      const nome=String(s.nome||'—').substring(0,30);
+      const numS=s.num_socio?String(s.num_socio)+' ':'';
+      const estado=String(s.estado||'—');
+      const quota=String(s.quota||'—');
+      let dataPag='—';
+      try{if(s.ultimo_pag&&s.ultimo_pag!==''){dataPag=new Date(s.ultimo_pag).toLocaleDateString('pt-PT');if(dataPag==='Invalid Date')dataPag='—';}}catch(_){}
+      const corEstado=estado==='Activo'?[6,95,70]:estado==='Inactivo'?[107,114,128]:[146,64,14];
+      const corQuota=quota==='Paga'?[6,95,70]:quota==='Em falta'?[153,27,27]:[146,64,14];
+      doc.setTextColor(...BLK);
+      doc.text(numS+nome,margin,y);
+      doc.setTextColor(...corEstado);
+      doc.text(estado,95,y);
+      doc.setTextColor(...corQuota);
+      doc.text(quota,135,y);
+      doc.setTextColor(...GRAY);
+      doc.text(dataPag,170,y);
+      y+=6;
+    }
+    // Rodapé em todas as páginas
+    const pg=doc.internal.getNumberOfPages();
+    for(let i=1;i<=pg;i++){
+      doc.setPage(i);
+      doc.setFillColor(...RED);doc.rect(0,285,W,12,'F');
+      doc.setTextColor(...WHITE);doc.setFontSize(7);
+      doc.text(String(DB.config?.clube_nome||'Clube')+' — Sócios',margin,291);
+      doc.text('Gerado '+new Date().toLocaleDateString('pt-PT')+' · '+i+'/'+pg,W-margin,291,{align:'right'});
+    }
+    doc.save('socios.pdf');
+    toast('📄 PDF de sócios gerado!');
+  }catch(err){
+    console.error('PDF Sócios erro:',err);
+    toast('❌ Erro ao gerar PDF: '+err.message);
   }
-  doc.save('socios.pdf');
-  toast('📄 PDF de sócios gerado!');
 }
 async function deleteMetodologia(id){
   if(!confirm('Apagar esta secção?'))return;
