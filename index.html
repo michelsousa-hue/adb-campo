@@ -577,9 +577,15 @@ textarea.form-input{resize:vertical;min-height:70px}
           <button class="btn btn-primary" onclick="openModalDelegado()" style="font-size:13px">+ Novo Delegado</button>
         </div>
         <div class="card" style="margin-top:12px">
-          <div class="card-title" style="margin-bottom:12px">👥 Perfis de Treinador</div>
+          <div class="card-title" style="margin-bottom:12px">🏒 Perfis de Treinador</div>
           <div id="admin-perfis-list" style="margin-bottom:12px"></div>
           <button class="btn btn-primary" onclick="openModalPerfil()" style="font-size:13px">+ Novo Perfil</button>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-title" style="margin-bottom:8px">💰 Tesoureiro</div>
+          <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">Acesso a Sócios, Fluxo de Caixa e Comunicados. Criado pela coordenação.</div>
+          <div id="admin-tesour-list" style="margin-bottom:12px"></div>
+          <button class="btn" onclick="openModalPerfil('__tesoureiro__')" style="font-size:13px;background:#ECFDF5;color:#166534;border-color:#86EFAC">+ Novo Tesoureiro</button>
         </div>
         <div class="card" style="margin-top:12px">
           <div class="card-title" style="margin-bottom:12px">🏒 Grupos / Escalões</div>
@@ -640,7 +646,8 @@ textarea.form-input{resize:vertical;min-height:70px}
           <div style="display:flex;gap:8px">
             <button class="btn btn-primary" onclick="openModalSocio()">+ Novo Sócio</button>
             <label class="btn" style="cursor:pointer;background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE">📥 Importar CSV<input type="file" accept=".csv" style="display:none" onchange="importarCSVSocios(this)"></label>
-            <button class="btn" onclick="gerarPDFSocios()">📄 PDF</button>
+            <button class="btn" onclick="gerarPDFSocios()">📄 PDF Lista</button>
+            <button class="btn" onclick="gerarCartoesSocios()" style="background:#ECFDF5;color:#166534;border-color:#86EFAC">🪪 Cartões</button>
           </div>
         </div>
         <div class="soc-stats" id="soc-stats"></div>
@@ -4476,15 +4483,27 @@ async function deleteDelegado(id){
 
 function renderAdminPerfis(){
   const el=document.getElementById('admin-perfis-list');if(!el)return;
-  el.innerHTML=profiles.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
+  const treinadores=profiles.filter(p=>p.key!=='coord'&&p.role!=='tesoureiro');
+  el.innerHTML=treinadores.length?treinadores.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
     <div style="flex:1">
       <strong>${p.name}</strong>
       ${p.licenca?`<span style="color:var(--gray-400);font-size:11px;margin-left:6px">Lic. ${p.licenca}</span>`:''}
       <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${p.grupos?p.grupos.join(', '):'Acesso total'}${p.cont?' · '+p.cont:''}</div>
     </div>
     <button class="btn btn-sm" onclick="openModalPerfil('${p.key}')">✏️ Editar</button>
-    ${p.key!=='coord'?`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>`:'<span style="font-size:10px;color:var(--gray-400)">Sistema</span>'}
-  </div>`).join('');
+    <button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>
+  </div>`).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px 0">Sem treinadores criados.</div>';
+  // Lista tesoureiros
+  const elT=document.getElementById('admin-tesour-list');if(!elT)return;
+  const tesoureiros=profiles.filter(p=>p.role==='tesoureiro');
+  elT.innerHTML=tesoureiros.length?tesoureiros.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
+    <div style="flex:1">
+      <strong>${p.name}</strong>
+      ${p.cont?`<div style="font-size:11px;color:var(--gray-500);margin-top:2px">${p.cont}</div>`:''}
+    </div>
+    <button class="btn btn-sm" onclick="openModalPerfil('${p.key}')">✏️ Editar</button>
+    <button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>
+  </div>`).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px 0">Sem tesoureiro criado.</div>';
 }
 function renderAdminGrupos(){
   const el=document.getElementById('admin-grupos-list');if(!el)return;
@@ -4494,9 +4513,10 @@ function renderAdminGrupos(){
   </div>`).join('');
 }
 function openModalPerfil(key){
-  const p=key?profiles.find(x=>x.key===key):null;
-  document.getElementById('perfil-edit-key').value=key||'';
-  document.getElementById('modal-perfil-title').textContent=p?'Editar Perfil':'Novo Perfil';
+  const presetTesour=key==='__tesoureiro__';
+  const p=key&&!presetTesour?profiles.find(x=>x.key===key):null;
+  document.getElementById('perfil-edit-key').value=p?p.key:'';
+  document.getElementById('modal-perfil-title').textContent=p?'Editar Perfil':(presetTesour?'Novo Tesoureiro':'Novo Perfil');
   document.getElementById('perfil-nome').value=p?p.name:'';
   document.getElementById('perfil-licenca').value=p?p.licenca||'':'';
   document.getElementById('perfil-cont').value=p?p.cont||'':'';
@@ -4508,7 +4528,7 @@ function openModalPerfil(key){
     <span>${g}</span>
   </label>`).join('');
   document.getElementById('perfil-acesso-total').checked=p&&!p.grupos&&p.role!=='tesoureiro';
-  document.getElementById('perfil-tesoureiro').checked=p&&p.role==='tesoureiro';
+  document.getElementById('perfil-tesoureiro').checked=(p&&p.role==='tesoureiro')||presetTesour;
   openModal('modal-perfil');
 }
 async function savePerfil(){
@@ -5255,6 +5275,129 @@ function gerarPDFCaixa(){
   y+=5;doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(150,150,150);
   doc.text(`GestiOK · ${clubeNome} · Exportado em ${new Date().toLocaleDateString('pt-PT')}`,W/2,285,{align:'center'});
   doc.save(`caixa-${epoca.replace('/','_')}.pdf`);
+}
+
+// ═══ CARTÕES DE SÓCIO CR80 ═══
+async function gerarCartoesSocios(){
+  const lista=(DB.socios||[]).filter(s=>s.estado==='Activo'&&s.quota==='Paga');
+  if(!lista.length){toast('Sem sócios activos com quota paga.');return;}
+  toast('A gerar cartões… aguarda ⏳');
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const clubeNome=(DB.config?.clube_nome||document.querySelector('.clube-nome')?.textContent||'GestiOK').trim();
+  const epoca=DB.config?.epoca||'2025/2026';
+  const corClube=getCorClube?getCorClube():'#8B1A1A';
+  // CR80: 85.6 × 54mm — 4 por página (2 colunas × 2 linhas)
+  const cW=85.6,cH=54;
+  const marginX=(210-cW*2)/3; // margem lateral entre e fora dos cartões
+  const marginY=(297-cH*2)/3;
+  const cols=[marginX, marginX*2+cW];
+  const rows=[marginY, marginY*2+cH];
+  // Parse cor hex para rgb
+  function hexRgb(hex){const r=parseInt(hex.slice(1,3),16);const g=parseInt(hex.slice(3,5),16);const b=parseInt(hex.slice(5,7),16);return[r,g,b];}
+  const [cr,cg,cb]=hexRgb(corClube);
+  // Logo em base64
+  let logoB64=null;
+  try{if(window.LOGO_B64){logoB64=window.LOGO_B64;}}catch(e){}
+  // Gerar QR code como canvas usando API pública (data URI)
+  async function qrDataUrl(text){
+    return new Promise(resolve=>{
+      const canvas=document.createElement('canvas');
+      canvas.width=120;canvas.height=120;
+      const ctx=canvas.getContext('2d');
+      // QR simples via qrserver.com (sem dependência extra)
+      const img=new Image();
+      img.crossOrigin='anonymous';
+      img.onload=()=>{ctx.drawImage(img,0,0,120,120);resolve(canvas.toDataURL('image/png'));};
+      img.onerror=()=>resolve(null);
+      img.src=`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(text)}&bgcolor=ffffff&color=000000&margin=2`;
+    });
+  }
+  function desenharCartao(x,y,socio,qrImg){
+    // Fundo branco
+    doc.setFillColor(255,255,255);
+    doc.roundedRect(x,y,cW,cH,3,3,'F');
+    // Borda subtil
+    doc.setDrawColor(220,220,220);doc.setLineWidth(0.3);
+    doc.roundedRect(x,y,cW,cH,3,3,'S');
+    // Cabeçalho colorido
+    doc.setFillColor(cr,cg,cb);
+    doc.roundedRect(x,y,cW,14,3,3,'F');
+    doc.setFillColor(cr,cg,cb);
+    doc.rect(x,y+8,cW,6,'F'); // retângulo extra para quadricular cantos inferiores do header
+    // Logo no cabeçalho
+    if(logoB64){
+      try{doc.addImage(logoB64,'JPEG',x+2,y+1,12,12);}catch(e){}
+    }
+    // Nome do clube no header
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+    doc.text(clubeNome,x+16,y+6);
+    doc.setFont('helvetica','normal');doc.setFontSize(6);
+    doc.text('CARTÃO DE SÓCIO',x+16,y+11);
+    // Época no canto direito do header
+    doc.setFontSize(5.5);
+    doc.text(epoca,x+cW-2,y+6,{align:'right'});
+    // Área principal
+    doc.setTextColor(30,30,30);
+    // Nome do sócio
+    doc.setFont('helvetica','bold');doc.setFontSize(9.5);
+    const nomeTrunc=socio.nome.length>22?socio.nome.substring(0,22)+'…':socio.nome;
+    doc.text(nomeTrunc,x+3,y+22);
+    // Tipo
+    doc.setFont('helvetica','normal');doc.setFontSize(6.5);
+    doc.setTextColor(100,100,100);
+    doc.text(socio.tipo==='atleta'?'🏒 Atleta':'👤 Sócio',x+3,y+28);
+    // Nº sócio
+    if(socio.num_socio){
+      doc.setFont('helvetica','bold');doc.setFontSize(7);
+      doc.setTextColor(cr,cg,cb);
+      doc.text(`Nº ${socio.num_socio}`,x+3,y+34);
+    }
+    // Estado badge
+    doc.setFillColor(209,250,229);doc.roundedRect(x+3,y+37,18,5,1,1,'F');
+    doc.setTextColor(6,95,70);doc.setFont('helvetica','bold');doc.setFontSize(5.5);
+    doc.text('✓ ACTIVO',x+4,y+40.5);
+    // QR code
+    if(qrImg){
+      try{doc.addImage(qrImg,'PNG',x+cW-22,y+17,20,20);}catch(e){}
+    }
+    // Linha decorativa inferior com cor do clube
+    doc.setFillColor(cr,cg,cb);doc.rect(x,y+cH-2,cW,2,'F');
+    doc.setFillColor(255,255,255);doc.roundedRect(x,y+cH-3,cW,3,1,1,'F');
+    doc.setFillColor(cr,cg,cb);doc.rect(x,y+cH-2,cW,2,'F');
+  }
+  // Gerar cartões
+  let idx=0;
+  let page=0;
+  for(let i=0;i<lista.length;i++){
+    const socio=lista[i];
+    const pos=idx%4;
+    if(pos===0&&idx>0){doc.addPage();page++;}
+    const col=pos%2;
+    const row=Math.floor(pos/2);
+    const x=cols[col];
+    const y=rows[row];
+    // QR com dados do sócio
+    const qrText=`GESTIOK|${clubeNome}|${socio.nome}|${socio.num_socio||''}|${epoca}`;
+    const qrImg=await qrDataUrl(qrText);
+    desenharCartao(x,y,socio,qrImg);
+    idx++;
+  }
+  // Linhas de corte em todas as páginas
+  const totalPages=doc.getNumberOfPages();
+  for(let p=1;p<=totalPages;p++){
+    doc.setPage(p);
+    doc.setDrawColor(180,180,180);doc.setLineWidth(0.2);doc.setLineDashPattern([1,1],0);
+    // Linha vertical central
+    doc.line(105,10,105,287);
+    // Linha horizontal central
+    doc.line(10,148.5,200,148.5);
+    doc.setLineDashPattern([],0);
+    doc.setTextColor(180,180,180);doc.setFontSize(5);
+    doc.text('✂',104,10);doc.text('✂',104,148);doc.text('✂',10,148);doc.text('✂',200,148);
+  }
+  doc.save(`cartoes-socios-${clubeNome.replace(/\s/g,'_')}.pdf`);
+  toast(`✅ ${lista.length} cartões gerados!`);
 }
 
 // ═══ INIT ═══
