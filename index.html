@@ -546,6 +546,38 @@ textarea.form-input{resize:vertical;min-height:70px}
       </div>
       <div id="page-admin" class="page">
         <div class="page-header"><div class="page-title">Administração</div></div>
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-title" style="margin-bottom:16px">🎨 Identidade do Clube</div>
+          <div class="form-row" style="margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Nome do Clube</label>
+              <input type="text" class="form-input" id="clube-nome-inp" placeholder="ex: ADB Campo">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Cor Principal</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="color" id="clube-cor-inp" value="#8B1A1A" style="width:48px;height:38px;border:1px solid var(--gray-200);border-radius:8px;cursor:pointer;padding:2px">
+                <span id="clube-cor-label" style="font-size:12px;color:var(--gray-500)">#8B1A1A</span>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;margin-top:10px">
+              <label class="form-label">Cor Secundária <span style="font-size:11px;color:var(--gray-400)">(fundo do ecrã de login)</span></label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="color" id="clube-cor2-inp" value="#C8960C" style="width:48px;height:38px;border:1px solid var(--gray-200);border-radius:8px;cursor:pointer;padding:2px">
+                <span id="clube-cor2-label" style="font-size:12px;color:var(--gray-500)">#C8960C</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label class="form-label">Logótipo do Clube</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+              <img id="clube-logo-preview" style="width:56px;height:56px;object-fit:contain;border:1px solid var(--gray-200);border-radius:8px;background:#f9fafb;display:none">
+              <button type="button" class="btn" onclick="document.getElementById('clube-logo-input').click()" style="font-size:13px">📁 Escolher logótipo</button>
+              <input type="file" id="clube-logo-input" accept="image/*" style="display:none" onchange="onClubeLogo(this)">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="saveIdentidadeClube()" style="font-size:13px">💾 Guardar Identidade</button>
+        </div>
         <div class="card-2col">
           <div class="card">
             <div class="card-title">🔑 Gerir PINs</div>
@@ -1239,6 +1271,10 @@ async function loadAllData(){
     (cfgR.data||[]).forEach(c=>{
       if(c.key==='pins') DB.config.pins=JSON.parse(c.value);
       if(c.key==='epoca') DB.config.epoca=c.value;
+      if(c.key==='clube_nome') DB.config.clube_nome=c.value;
+      if(c.key==='clube_cor') DB.config.clube_cor=c.value;
+      if(c.key==='clube_cor2') DB.config.clube_cor2=c.value;
+      if(c.key==='clube_logo') DB.config.clube_logo=c.value;
       if(c.key==='grupos'){try{const g=JSON.parse(c.value);if(Array.isArray(g)&&g.length>0){GRUPOS.length=0;g.forEach(x=>GRUPOS.push(x));}}catch(e){}}
       if(c.key==='profiles'){try{const ps=JSON.parse(c.value);if(Array.isArray(ps)&&ps.length>0){profiles.length=0;ps.forEach(p=>profiles.push({...p,licenca:p.licenca||'',cont:p.cont||''}));}}catch(e){}}
     });
@@ -3084,6 +3120,7 @@ function renderAdmin(){
   document.getElementById('epoca-label').textContent=DB.config.epoca;
   document.getElementById('pins-tbody').innerHTML=profiles.map(p=>`<tr><td>${p.name}</td><td><span style="font-family:var(--mono)">••••</span></td><td style="display:flex;gap:6px"><button class="btn btn-sm" onclick="openChangePIN('${p.key}','${p.name}')">Alterar PIN</button>${p.key!=='coord'?`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>`:''}</td></tr>`).join('');
   document.getElementById('admin-metrics').innerHTML=`<div class="metric-card"><div class="metric-label">Total jogadores</div><div class="metric-value">${DB.jogadores.length}</div></div><div class="metric-card"><div class="metric-label">Sessões</div><div class="metric-value">${DB.sessoes.length}</div></div>${GRUPOS.map(g=>`<div class="metric-card"><div class="metric-label">${g}</div><div class="metric-value">${jogsDoGrupo(g).length}</div></div>`).join('')}`;
+  renderAdminIdentidade();
   renderAdminDelegados();
   renderAdminPerfis();
   renderAdminGrupos();
@@ -5284,21 +5321,20 @@ async function gerarCartoesSocios(){
   toast('A gerar cartões… aguarda ⏳');
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const clubeNome=(DB.config?.clube_nome||document.querySelector('.clube-nome')?.textContent||'GestiOK').trim();
+  const clubeNome=(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||document.title.split('—')[0]||'GestiOK').trim();
   const epoca=DB.config?.epoca||'2025/2026';
   const corClube=(typeof getCorClube==='function')?getCorClube():(DB.config?.clube_cor||getComputedStyle(document.documentElement).getPropertyValue('--red').trim()||'#8B1A1A');
   // CR80: 85.6 × 54mm — 4 por página (2 colunas × 2 linhas)
   const cW=85.6,cH=54;
-  const marginX=(210-cW*2)/3; // margem lateral entre e fora dos cartões
+  const marginX=(210-cW*2)/3;
   const marginY=(297-cH*2)/3;
   const cols=[marginX, marginX*2+cW];
   const rows=[marginY, marginY*2+cH];
   // Parse cor hex para rgb
-  function hexRgb(hex){const r=parseInt(hex.slice(1,3),16);const g=parseInt(hex.slice(3,5),16);const b=parseInt(hex.slice(5,7),16);return[r,g,b];}
-  const [cr,cg,cb]=hexRgb(corClube);
-  // Logo em base64
-  let logoB64=null;
-  try{if(window.LOGO_B64){logoB64=window.LOGO_B64;}}catch(e){}
+  function hexRgb(hex){const h=hex.replace('#','');const r=parseInt(h.substring(0,2),16);const g=parseInt(h.substring(2,4),16);const b=parseInt(h.substring(4,6),16);return[r,g,b];}
+  const [cr,cg,cb]=hexRgb(corClube.startsWith('#')?corClube:'#8B1A1A');
+  // Logo
+  const logoSrc=typeof LOGO_B64!=='undefined'?LOGO_B64:(window.LOGO_B64||null);
   // Gerar QR code como canvas usando API pública (data URI)
   async function qrDataUrl(text){
     return new Promise(resolve=>{
@@ -5326,14 +5362,14 @@ async function gerarCartoesSocios(){
     doc.setFillColor(cr,cg,cb);
     doc.rect(x,y+8,cW,6,'F'); // retângulo extra para quadricular cantos inferiores do header
     // Logo no cabeçalho
-    if(logoB64){
-      try{doc.addImage(logoB64,'JPEG',x+2,y+1,12,12);}catch(e){}
+    if(logoSrc){
+      try{doc.addImage(logoSrc,'JPEG',x+2,y+1,12,12);}catch(e){}
     }
     // Nome do clube no header
     doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
     doc.text(clubeNome,x+16,y+6);
     doc.setFont('helvetica','normal');doc.setFontSize(6);
-    doc.text('CARTÃO DE SÓCIO',x+16,y+11);
+    doc.text('CARTAO DE SOCIO',x+16,y+11);
     // Época no canto direito do header
     doc.setFontSize(5.5);
     doc.text(epoca,x+cW-2,y+6,{align:'right'});
@@ -5341,7 +5377,7 @@ async function gerarCartoesSocios(){
     doc.setTextColor(30,30,30);
     // Nome do sócio
     doc.setFont('helvetica','bold');doc.setFontSize(9.5);
-    const nomeTrunc=socio.nome.length>22?socio.nome.substring(0,22)+'…':socio.nome;
+    const nomeTrunc=socio.nome.length>24?socio.nome.substring(0,24)+'...':socio.nome;
     doc.text(nomeTrunc,x+3,y+22);
     // Tipo
     doc.setFont('helvetica','normal');doc.setFontSize(6.5);
@@ -5351,12 +5387,12 @@ async function gerarCartoesSocios(){
     if(socio.num_socio){
       doc.setFont('helvetica','bold');doc.setFontSize(7);
       doc.setTextColor(cr,cg,cb);
-      doc.text(`Nº ${socio.num_socio}`,x+3,y+34);
+      doc.text('N. '+socio.num_socio,x+3,y+34);
     }
     // Estado badge
     doc.setFillColor(209,250,229);doc.roundedRect(x+3,y+37,18,5,1,1,'F');
     doc.setTextColor(6,95,70);doc.setFont('helvetica','bold');doc.setFontSize(5.5);
-    doc.text('✓ ACTIVO',x+4,y+40.5);
+    doc.text('ACTIVO',x+4,y+40.5);
     // QR code
     if(qrImg){
       try{doc.addImage(qrImg,'PNG',x+cW-22,y+17,20,20);}catch(e){}
@@ -5393,17 +5429,81 @@ async function gerarCartoesSocios(){
     // Linha horizontal central
     doc.line(10,148.5,200,148.5);
     doc.setLineDashPattern([],0);
-    doc.setTextColor(180,180,180);doc.setFontSize(5);
-    doc.text('✂',104,10);doc.text('✂',104,148);doc.text('✂',10,148);doc.text('✂',200,148);
+
   }
   doc.save(`cartoes-socios-${clubeNome.replace(/\s/g,'_')}.pdf`);
   toast(`✅ ${lista.length} cartões gerados!`);
 }
 
+// ═══ IDENTIDADE DO CLUBE ═══
+function getCorClube(){
+  const hex=DB.config?.clube_cor||getComputedStyle(document.documentElement).getPropertyValue('--red').trim()||'#8B1A1A';
+  try{const h=hex.replace('#','');return[parseInt(h.substring(0,2),16),parseInt(h.substring(2,4),16),parseInt(h.substring(4,6),16)];}catch(e){return[139,26,26];}
+}
+function renderAdminIdentidade(){
+  const nome=DB.config.clube_nome||'ADB Campo';
+  const cor=DB.config.clube_cor||'#8B1A1A';
+  const cor2=DB.config.clube_cor2||'#C8960C';
+  const logo=DB.config.clube_logo||null;
+  const nomeInp=document.getElementById('clube-nome-inp');
+  const corInp=document.getElementById('clube-cor-inp');
+  const corLabel=document.getElementById('clube-cor-label');
+  const cor2Inp=document.getElementById('clube-cor2-inp');
+  const cor2Label=document.getElementById('clube-cor2-label');
+  const preview=document.getElementById('clube-logo-preview');
+  if(nomeInp)nomeInp.value=nome;
+  if(corInp){corInp.value=cor;corInp.oninput=()=>{if(corLabel)corLabel.textContent=corInp.value;};}
+  if(corLabel)corLabel.textContent=cor;
+  if(cor2Inp){cor2Inp.value=cor2;cor2Inp.oninput=()=>{if(cor2Label)cor2Label.textContent=cor2Inp.value;};}
+  if(cor2Label)cor2Label.textContent=cor2;
+  if(preview&&logo){preview.src=logo;preview.style.display='block';}
+}
+function onClubeLogo(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const preview=document.getElementById('clube-logo-preview');
+    if(preview){preview.src=e.target.result;preview.style.display='block';}
+    window._clubeLogoB64=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function saveIdentidadeClube(){
+  const nome=document.getElementById('clube-nome-inp').value.trim()||'ADB Campo';
+  const cor=document.getElementById('clube-cor-inp').value||'#8B1A1A';
+  const cor2=document.getElementById('clube-cor2-inp')?.value||'#C8960C';
+  const logo=window._clubeLogoB64||DB.config.clube_logo||null;
+  showLoading(true);
+  await sb.from('config').upsert({key:'clube_nome',value:nome});
+  await sb.from('config').upsert({key:'clube_cor',value:cor});
+  await sb.from('config').upsert({key:'clube_cor2',value:cor2});
+  if(logo)await sb.from('config').upsert({key:'clube_logo',value:logo});
+  DB.config.clube_nome=nome;DB.config.clube_cor=cor;DB.config.clube_cor2=cor2;
+  if(logo)DB.config.clube_logo=logo;
+  aplicarIdentidadeClube();
+  showLoading(false);
+  toast('✅ Identidade do clube guardada!');
+}
+function aplicarIdentidadeClube(){
+  const nome=DB.config.clube_nome||'ADB Campo';
+  const cor=DB.config.clube_cor||'#8B1A1A';
+  const logo=DB.config.clube_logo||null;
+  document.documentElement.style.setProperty('--red',cor);
+  document.documentElement.style.setProperty('--red-dark',cor);
+  document.querySelectorAll('.topbar-title').forEach(el=>el.textContent=nome);
+  if(logo){
+    const b64=logo.includes(',')?logo.split(',')[1]:logo;
+    window.LOGO_B64=b64;
+    // Actualizar logo no login se existir
+    const loginLogo=document.getElementById('login-logo-img');
+    if(loginLogo){loginLogo.src=logo;loginLogo.style.display='block';}
+  }
+}
+
 // ═══ INIT ═══
 document.getElementById('ses-data').value=new Date().toISOString().split('T')[0];
 document.getElementById('conv-data').value=new Date().toISOString().split('T')[0];
-loadAllData().then(async ()=>{await loadCaixa();console.log('ADB Campo — dados carregados do Supabase');});
+loadAllData().then(async ()=>{await loadCaixa();aplicarIdentidadeClube();console.log('ADB Campo — dados carregados do Supabase');});
 </script>
 </body>
 </html>
