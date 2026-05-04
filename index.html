@@ -1235,6 +1235,8 @@ async function loadAllData(){
       if(c.key==='grupos'){try{const g=JSON.parse(c.value);if(Array.isArray(g)&&g.length>0){GRUPOS.length=0;g.forEach(x=>GRUPOS.push(x));}}catch(e){}}
       if(c.key==='profiles'){try{const ps=JSON.parse(c.value);if(Array.isArray(ps)&&ps.length>0){profiles.length=0;ps.forEach(p=>profiles.push({...p,licenca:p.licenca||'',cont:p.cont||''}));}}catch(e){}}
     });
+    // Re-renderizar lista de perfis no login com dados do Supabase
+    renderLoginProfiles();
     // Seed jogadores if empty
     if(DB.jogadores.length===0) await seedJogadores();
     // Final dedup by nome (safety net)
@@ -1365,6 +1367,25 @@ function logout(){
   document.getElementById('profile-list').style.display='grid';
   document.getElementById('pin-entry').style.display='none';
   document.querySelectorAll('.pin-profile').forEach(el=>el.classList.remove('selected'));
+}
+function renderLoginProfiles(){
+  const list=document.getElementById('profile-list');
+  if(!list)return;
+  const icons={coord:'🎯',mesa:'📋',tesoureiro:'💰'};
+  const bgs={coord:'#FEE2E2',mesa:'#FEF3C7',tesoureiro:'#D1FAE5'};
+  list.innerHTML=profiles.map((p,i)=>{
+    const isTesour=p.role==='tesoureiro';
+    const icon=icons[p.key]||icons[p.role]||(isTesour?'💰':'🏒');
+    const bg=bgs[p.key]||bgs[p.role]||(isTesour?'#D1FAE5':'#DBEAFE');
+    const border=isTesour?'style="border-color:#10B981;background:#ECFDF5"':'';
+    return`<div class="pin-profile" onclick="selectProfile(${i})" id="profile-${i}" ${border}>
+      <div class="pin-profile-icon" style="background:${bg}">${icon}</div>
+      <div><div class="pin-profile-name">${p.name}</div><div class="pin-profile-role">${isTesour?'💰 Tesouraria':p.role||p.name}</div></div>
+    </div>`;
+  }).join('')+`<div class="pin-profile" onclick="selectProfile('mesa')" id="profile-mesa" style="border-color:#F59E0B;background:#FFFBEB">
+    <div class="pin-profile-icon" style="background:#FEF3C7">📋</div>
+    <div><div class="pin-profile-name">Mesa de Jogo</div><div class="pin-profile-role">Registo do jogo</div></div>
+  </div>`;
 }
 function setupForUser(){
   const isCoord=currentUser.key==='coord';
