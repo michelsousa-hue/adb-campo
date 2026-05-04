@@ -5323,16 +5323,16 @@ async function gerarCartoesSocios(){
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const clubeNome=(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||document.title.split('—')[0]||'GestiOK').trim();
   const epoca=DB.config?.epoca||'2025/2026';
-  const corClube=(typeof getCorClube==='function')?getCorClube():(DB.config?.clube_cor||getComputedStyle(document.documentElement).getPropertyValue('--red').trim()||'#8B1A1A');
   // CR80: 85.6 × 54mm — 4 por página (2 colunas × 2 linhas)
   const cW=85.6,cH=54;
   const marginX=(210-cW*2)/3;
   const marginY=(297-cH*2)/3;
   const cols=[marginX, marginX*2+cW];
   const rows=[marginY, marginY*2+cH];
-  // Parse cor hex para rgb
+  // Cor do clube — getCorClube() retorna array [r,g,b], clube_cor é hex
+  const hexCor=DB.config?.clube_cor||getComputedStyle(document.documentElement).getPropertyValue('--red').trim()||'#8B1A1A';
   function hexRgb(hex){const h=hex.replace('#','');const r=parseInt(h.substring(0,2),16);const g=parseInt(h.substring(2,4),16);const b=parseInt(h.substring(4,6),16);return[r,g,b];}
-  const [cr,cg,cb]=hexRgb(corClube.startsWith('#')?corClube:'#8B1A1A');
+  const [cr,cg,cb]=hexRgb(hexCor.startsWith('#')?hexCor:'#8B1A1A');
   // Logo
   const logoSrc=typeof LOGO_B64!=='undefined'?LOGO_B64:(window.LOGO_B64||null);
   // Gerar QR code como canvas usando API pública (data URI)
