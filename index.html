@@ -214,6 +214,8 @@ textarea.form-input{resize:vertical;min-height:70px}
 .soc-mode-toggle{display:flex;gap:0;border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
 .soc-mode-btn{flex:1;padding:7px 14px;font-size:12px;font-weight:600;background:#fff;border:none;cursor:pointer;color:var(--gray-500);transition:.15s}
 .soc-mode-btn.active{background:var(--primary);color:#fff}
+/* Caixa */
+#caixa-lista .tbl td,.caixa-lista .tbl th{padding:7px 10px}
 /* Modo Rápido */
 .soc-rapido-header{display:grid;grid-template-columns:32px 1fr 90px 90px 100px 110px 36px;gap:8px;padding:6px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius) var(--radius) 0 0;font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em}
 .soc-rapido-row{display:grid;grid-template-columns:32px 1fr 90px 90px 100px 110px 36px;gap:8px;align-items:center;padding:7px 12px;border:1px solid var(--gray-100);border-top:none;background:#fff;font-size:12px;transition:.1s}
@@ -336,8 +338,11 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div class="nav-item" data-page="jogo"><span class="nav-icon">🏒</span>Jogo ao Vivo</div>
       <div class="nav-section coord-only" style="display:none">Administração</div>
       <div class="nav-item coord-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
-      <div class="nav-item coord-only" data-page="socios" style="display:none"><span class="nav-icon">🏅</span>Sócios</div>
       <div class="nav-item coord-only" data-page="admin" style="display:none"><span class="nav-icon">⚙️</span>Administração</div>
+      <div class="nav-section tesour-only" style="display:none">Tesouraria</div>
+      <div class="nav-item tesour-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
+      <div class="nav-item tesour-only" data-page="socios" style="display:none"><span class="nav-icon">🏅</span>Sócios</div>
+      <div class="nav-item tesour-only" data-page="caixa" style="display:none"><span class="nav-icon">💰</span>Fluxo de Caixa</div>
     </nav>
     <main class="main">
       <div id="page-dashboard" class="page active">
@@ -695,7 +700,109 @@ textarea.form-input{resize:vertical;min-height:70px}
           <div id="soc-rapido-lista"></div>
         </div>
       </div>
+      <!-- ── FLUXO DE CAIXA ── -->
+      <div id="page-caixa" class="page">
+        <div class="page-header">
+          <div><div class="page-title">💰 Fluxo de Caixa</div><div class="page-sub">Receitas, despesas e balanço por época</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="openModalCaixaCategoria()" style="background:#F0FDF4;color:#166534;border-color:#86EFAC">⚙️ Categorias</button>
+            <button class="btn btn-primary" onclick="openModalMovimento()">+ Movimento</button>
+            <button class="btn" onclick="gerarPDFCaixa()">📄 Relatório PDF</button>
+          </div>
+        </div>
+        <!-- Resumo por conta -->
+        <div class="metrics-grid" id="caixa-resumo"></div>
+        <!-- Filtros -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+          <select class="form-input" id="caixa-fil-conta" onchange="renderCaixa()" style="max-width:160px">
+            <option value="">Todas as contas</option>
+            <option value="oficial">Conta Oficial</option>
+            <option value="diario">Dia-a-Dia</option>
+          </select>
+          <select class="form-input" id="caixa-fil-tipo" onchange="renderCaixa()" style="max-width:150px">
+            <option value="">Receitas e Despesas</option>
+            <option value="receita">Receitas</option>
+            <option value="despesa">Despesas</option>
+          </select>
+          <select class="form-input" id="caixa-fil-epoca" onchange="renderCaixa()" style="max-width:160px" id="caixa-fil-epoca"></select>
+          <input type="text" class="form-input" id="caixa-search" onkeyup="renderCaixa()" placeholder="🔍 Pesquisar…" style="max-width:200px">
+        </div>
+        <!-- Lista movimentos -->
+        <div class="card" style="padding:0;overflow:hidden">
+          <div id="caixa-lista"></div>
+        </div>
+      </div>
     </main>
+  </div>
+</div>
+
+<!-- MODAL MOVIMENTO CAIXA -->
+<div id="modal-movimento" class="modal-bg">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header"><span class="modal-title" id="mov-modal-title">Novo Movimento</span><button class="modal-close" onclick="closeModal('modal-movimento')">✕</button></div>
+    <input type="hidden" id="mov-edit-id">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tipo</label>
+        <select class="form-input" id="mov-tipo" onchange="updateMovCategorias()">
+          <option value="receita">Receita</option>
+          <option value="despesa">Despesa</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Conta</label>
+        <select class="form-input" id="mov-conta">
+          <option value="oficial">Conta Oficial</option>
+          <option value="diario">Dia-a-Dia</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="mov-data"></div>
+      <div class="form-group"><label class="form-label">Valor (€)</label><input type="number" class="form-input" id="mov-valor" min="0" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Categoria</label>
+      <select class="form-input" id="mov-categoria"></select>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Descrição</label><input type="text" class="form-input" id="mov-descricao" placeholder="ex: Quotas de Março"></div>
+    <div class="form-group" style="margin-bottom:16px"><label class="form-label">Época</label>
+      <select class="form-input" id="mov-epoca"></select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveMovimento()">Guardar</button>
+      <button class="btn" onclick="closeModal('modal-movimento')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CATEGORIAS CAIXA -->
+<div id="modal-caixa-cat" class="modal-bg">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><span class="modal-title">⚙️ Categorias</span><button class="modal-close" onclick="closeModal('modal-caixa-cat')">✕</button></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px;text-transform:uppercase">📈 Receitas</div>
+        <div id="cat-receitas-list" style="margin-bottom:10px"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" class="form-input" id="cat-nova-receita" placeholder="Nova categoria…" style="font-size:12px">
+          <button class="btn btn-sm btn-green" onclick="addCategoria('receita')">+</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:#DC2626;margin-bottom:8px;text-transform:uppercase">📉 Despesas</div>
+        <div id="cat-despesas-list" style="margin-bottom:10px"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" class="form-input" id="cat-nova-despesa" placeholder="Nova categoria…" style="font-size:12px">
+          <button class="btn btn-sm btn-primary" onclick="addCategoria('despesa')">+</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200)">
+      <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-bottom:10px;text-transform:uppercase">📅 Transição de Época</div>
+      <div style="font-size:13px;color:var(--gray-500);margin-bottom:10px">Transfere o saldo actual para a nova época, mantendo histórico consultável.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" class="form-input" id="nova-epoca-nome" placeholder="ex: 2026/2027" style="max-width:160px">
+        <button class="btn btn-primary" onclick="fecharEpoca()">Fechar Época e Transitar Saldo</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -874,6 +981,7 @@ textarea.form-input{resize:vertical;min-height:70px}
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Escalões (pode selecionar mais do que um)</label>
       <div id="perfil-grupos-checks" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
       <div style="margin-top:6px"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="perfil-acesso-total"> <span style="color:var(--gray-500)">Acesso total (Coordenador)</span></label></div>
+      <div style="margin-top:4px"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="perfil-tesoureiro"> <span style="color:var(--gray-500)">💰 Tesoureiro (Sócios + Caixa + Comunicados)</span></label></div>
     </div>
     <div class="form-group" style="margin-bottom:16px"><label class="form-label">PIN (4 dígitos)</label><input type="password" class="form-input" id="perfil-pin" maxlength="4" placeholder="1234"></div>
     <button class="btn btn-primary" style="width:100%" onclick="savePerfil()">Guardar Perfil</button>
@@ -1261,9 +1369,11 @@ function logout(){
 function setupForUser(){
   const isCoord=currentUser.key==='coord';
   const isMesa=currentUser.key==='mesa';
+  const isTesour=currentUser.role==='tesoureiro';
   document.querySelectorAll('.coord-only').forEach(el=>el.style.display=isCoord?'':'none');
+  document.querySelectorAll('.tesour-only').forEach(el=>el.style.display=isTesour?'':'none');
   if(!isCoord){
-    document.querySelector('[data-page="admin"]').style.display='none';
+    document.querySelector('[data-page="admin"]')?.style && (document.querySelector('[data-page="admin"]').style.display='none');
     if(currentUser.key==='t2')document.querySelector('[data-page="avaliacao"]').style.display='none';
   }
   // Mesa de Jogo: esconder tudo exceto Jogo ao Vivo
@@ -1300,7 +1410,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
   });
 });
 function renderPage(p){
-  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{}};
+  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:renderCaixa};
   if(map[p])map[p]();
 }
 function buildGrupoTabs(cid,pageKey){
@@ -3915,8 +4025,11 @@ function _socFiltered(){
 }
 
 function renderSocios(){
-  const isCoord=!currentUser?.grupos;
-  document.querySelectorAll('[data-page="socios"]').forEach(el=>el.style.display=isCoord?'flex':'none');
+  const isTesour=currentUser?.role==='tesoureiro';
+  const isCoord=currentUser?.key==='coord';
+  const canAccess=isTesour||isCoord;
+  // Sócios visível só para tesoureiro (e coord em modo legado)
+  document.querySelectorAll('[data-page="socios"]').forEach(el=>el.style.display=(isTesour?'flex':'none'));
   const lista=DB.socios||[];
   const statsEl=document.getElementById('soc-stats');
   if(statsEl){
@@ -3930,8 +4043,8 @@ function renderSocios(){
       <div class="metric-card"><div class="metric-label">Em Falta</div><div class="metric-value ${devem>0?'metric-danger':''}">${devem}</div></div>
       <div class="metric-card"><div class="metric-label">Receita</div><div class="metric-value">\u20ac${receita.toFixed(0)}</div></div>`;
   }
-  if(_socMode==='gestao') _renderSociosGestao(isCoord);
-  else _renderSociosRapido(isCoord);
+  if(_socMode==='gestao') _renderSociosGestao(canAccess);
+  else _renderSociosRapido(canAccess);
 }
 
 function _renderSociosGestao(isCoord){
@@ -3968,6 +4081,7 @@ function _renderSociosGestao(isCoord){
         ${s.valor?`<div>Valor: <strong>\u20ac${s.valor}/${s.periodo||'período'}</strong></div>`:''}
         ${s.ultimo_pag?`<div style="margin-top:4px">Último pag.: <strong>${new Date(s.ultimo_pag).toLocaleDateString('pt-PT')}</strong></div>`:''}
         ${s.contacto?`<div style="margin-top:4px">\ud83d\udcde ${s.contacto}</div>`:''}
+        ${atleta&&atleta.contacto?`<div style="margin-top:4px;color:var(--blue)">\ud83d\udcf1 Atleta: ${atleta.contacto}</div>`:''}
         ${s.obs?`<div style="margin-top:4px;color:var(--gray-400)">${s.obs}</div>`:''}
       </div>
     </div>`;
@@ -4372,7 +4486,8 @@ function openModalPerfil(key){
     <input type="checkbox" value="${g}" ${p&&(p.grupos||[]).includes(g)?'checked':''}>
     <span>${g}</span>
   </label>`).join('');
-  document.getElementById('perfil-acesso-total').checked=p&&!p.grupos;
+  document.getElementById('perfil-acesso-total').checked=p&&!p.grupos&&p.role!=='tesoureiro';
+  document.getElementById('perfil-tesoureiro').checked=p&&p.role==='tesoureiro';
   openModal('modal-perfil');
 }
 async function savePerfil(){
@@ -4383,14 +4498,16 @@ async function savePerfil(){
   const licenca=document.getElementById('perfil-licenca').value.trim();
   const cont=document.getElementById('perfil-cont').value.trim();
   const acessoTotal=document.getElementById('perfil-acesso-total').checked;
-  const grupos=acessoTotal?null:[...document.querySelectorAll('#perfil-grupos-checks input:checked')].map(x=>x.value);
+  const isTesour=document.getElementById('perfil-tesoureiro').checked;
+  const grupos=acessoTotal||isTesour?null:[...document.querySelectorAll('#perfil-grupos-checks input:checked')].map(x=>x.value);
+  const roleVal=isTesour?'tesoureiro':(acessoTotal?'Acesso total':grupos?grupos.join('+'):nome);
   if(editKey){
     const p=profiles.find(x=>x.key===editKey);
-    if(p){p.name=nome;p.grupos=grupos;p.licenca=licenca;p.cont=cont;if(pin&&pin.length===4)DB.config.pins[editKey]=pin;}
+    if(p){p.name=nome;p.grupos=grupos;p.role=roleVal;p.licenca=licenca;p.cont=cont;if(pin&&pin.length===4)DB.config.pins[editKey]=pin;}
   } else {
     if(!pin||pin.length!==4||!/^\d{4}$/.test(pin)){alert('PIN deve ter 4 dígitos');return;}
     const key='t'+(Date.now()%10000);
-    profiles.push({key,name:nome,role:grupos?grupos.join('+'):'Acesso total',grupos,licenca,cont});
+    profiles.push({key,name:nome,role:roleVal,grupos,licenca,cont});
     DB.config.pins[key]=pin;
   }
   await sb.from('config').upsert({key:'pins',value:JSON.stringify(DB.config.pins)});
@@ -4878,10 +4995,251 @@ Dados:
   btn.disabled=false;btn.textContent='✨ Gerar com IA';
 }
 
+// ═══ FLUXO DE CAIXA ═══
+let DB_CAIXA={movimentos:[],categorias:{receita:['Quotas','Patrocinadores','Rifas','Subsídios','Outros'],despesa:['Árbitros','Deslocações','Equipamentos','Seguros','Instalações','Alojamento','Outros']}};
+const EPOCAS_DEFAULT=['2024/2025','2025/2026','2026/2027'];
+
+async function loadCaixa(){
+  const [movR,catR]=await Promise.all([
+    sb.from('caixa').select('*').order('data',{ascending:false}),
+    sb.from('caixa_config').select('*')
+  ]);
+  DB_CAIXA.movimentos=movR?.data||[];
+  if(catR?.data?.length){
+    const cfg=catR.data.find(x=>x.key==='categorias');
+    if(cfg)try{DB_CAIXA.categorias=JSON.parse(cfg.value);}catch(e){}
+  }
+}
+
+function _epocas(){
+  const eps=new Set([...EPOCAS_DEFAULT,...(DB_CAIXA.movimentos||[]).map(m=>m.epoca||'').filter(Boolean)]);
+  return[...eps].sort().reverse();
+}
+function _currentEpoca(){return DB.config?.epoca||'2025/2026';}
+
+function renderCaixa(){
+  const movs=DB_CAIXA.movimentos||[];
+  const filConta=(document.getElementById('caixa-fil-conta')?.value)||'';
+  const filTipo=(document.getElementById('caixa-fil-tipo')?.value)||'';
+  const search=((document.getElementById('caixa-search')?.value)||'').toLowerCase();
+  // Popular select de épocas
+  const selEpoca=document.getElementById('caixa-fil-epoca');
+  if(selEpoca){
+    const curVal=selEpoca.value||_currentEpoca();
+    selEpoca.innerHTML=`<option value="">Todas as épocas</option>`+_epocas().map(e=>`<option value="${e}" ${e===curVal?'selected':''}>${e}</option>`).join('');
+  }
+  const filEpoca=(document.getElementById('caixa-fil-epoca')?.value)||'';
+  const filtered=movs.filter(m=>
+    (!filConta||m.conta===filConta)&&
+    (!filTipo||m.tipo===filTipo)&&
+    (!filEpoca||m.epoca===filEpoca)&&
+    (!search||(m.descricao||'').toLowerCase().includes(search)||(m.categoria||'').toLowerCase().includes(search))
+  );
+  // Resumo
+  const resumo=document.getElementById('caixa-resumo');
+  if(resumo){
+    const rec=filtered.filter(m=>m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    const desp=filtered.filter(m=>m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    const saldo=rec-desp;
+    const recOf=filtered.filter(m=>m.tipo==='receita'&&m.conta==='oficial').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    const despOf=filtered.filter(m=>m.tipo==='despesa'&&m.conta==='oficial').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    const recDia=filtered.filter(m=>m.tipo==='receita'&&m.conta==='diario').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    const despDia=filtered.filter(m=>m.tipo==='despesa'&&m.conta==='diario').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    resumo.innerHTML=`
+      <div class="metric-card"><div class="metric-label">📈 Total Receitas</div><div class="metric-value metric-ok">€${rec.toFixed(2)}</div></div>
+      <div class="metric-card"><div class="metric-label">📉 Total Despesas</div><div class="metric-value ${desp>0?'metric-danger':''}">€${desp.toFixed(2)}</div></div>
+      <div class="metric-card"><div class="metric-label">💰 Saldo</div><div class="metric-value ${saldo>=0?'metric-ok':'metric-danger'}">€${saldo.toFixed(2)}</div></div>
+      <div class="metric-card"><div class="metric-label">🏦 Conta Oficial</div><div class="metric-value ${(recOf-despOf)>=0?'metric-ok':'metric-danger'}">€${(recOf-despOf).toFixed(2)}</div></div>
+      <div class="metric-card"><div class="metric-label">💼 Dia-a-Dia</div><div class="metric-value ${(recDia-despDia)>=0?'metric-ok':'metric-danger'}">€${(recDia-despDia).toFixed(2)}</div></div>`;
+  }
+  // Lista
+  const lista=document.getElementById('caixa-lista');
+  if(!lista)return;
+  if(!filtered.length){
+    lista.innerHTML=`<div style="text-align:center;padding:40px;color:var(--gray-400)"><div style="font-size:36px;margin-bottom:8px">💸</div><div>Sem movimentos. Clica em "+ Movimento" para adicionar.</div></div>`;
+    return;
+  }
+  lista.innerHTML=`<table class="tbl"><thead><tr>
+    <th>Data</th><th>Tipo</th><th>Conta</th><th>Categoria</th><th>Descrição</th><th>Época</th><th style="text-align:right">Valor</th><th></th>
+  </tr></thead><tbody>`+filtered.map(m=>`<tr>
+    <td>${m.data?new Date(m.data+'T00:00:00').toLocaleDateString('pt-PT'):'-'}</td>
+    <td><span class="badge ${m.tipo==='receita'?'badge-ok':'badge-danger'}">${m.tipo==='receita'?'📈 Receita':'📉 Despesa'}</span></td>
+    <td><span style="font-size:11px;color:var(--gray-500)">${m.conta==='oficial'?'🏦 Oficial':'💼 Dia-a-Dia'}</span></td>
+    <td>${m.categoria||'-'}</td>
+    <td>${m.descricao||'-'}</td>
+    <td style="font-size:11px;color:var(--gray-400)">${m.epoca||'-'}</td>
+    <td style="text-align:right;font-weight:600;color:${m.tipo==='receita'?'var(--green)':'#DC2626'}">€${parseFloat(m.valor||0).toFixed(2)}</td>
+    <td><div style="display:flex;gap:4px">
+      <button class="btn btn-sm" onclick="openModalMovimento('${m.id}')" style="color:#2563EB;border-color:#BFDBFE">✏️</button>
+      <button class="btn btn-sm" onclick="deleteMovimento('${m.id}')" style="color:#DC2626;border-color:#FCA5A5">🗑️</button>
+    </div></td>
+  </tr>`).join('')+'</tbody></table>';
+}
+
+function openModalMovimento(id){
+  const m=id?(DB_CAIXA.movimentos||[]).find(x=>x.id===id):null;
+  document.getElementById('mov-edit-id').value=id||'';
+  document.getElementById('mov-modal-title').textContent=m?'Editar Movimento':'Novo Movimento';
+  document.getElementById('mov-tipo').value=m?.tipo||'receita';
+  document.getElementById('mov-conta').value=m?.conta||'oficial';
+  document.getElementById('mov-data').value=m?.data||new Date().toISOString().split('T')[0];
+  document.getElementById('mov-valor').value=m?.valor||'';
+  document.getElementById('mov-descricao').value=m?.descricao||'';
+  // Épocas
+  const selEp=document.getElementById('mov-epoca');
+  const eps=_epocas();
+  selEp.innerHTML=eps.map(e=>`<option value="${e}" ${(m?.epoca||_currentEpoca())===e?'selected':''}>${e}</option>`).join('');
+  updateMovCategorias(m?.categoria);
+  openModal('modal-movimento');
+}
+function updateMovCategorias(selected){
+  const tipo=document.getElementById('mov-tipo')?.value||'receita';
+  const cats=(DB_CAIXA.categorias||{})[tipo]||[];
+  const sel=document.getElementById('mov-categoria');
+  sel.innerHTML=cats.map(c=>`<option value="${c}" ${c===selected?'selected':''}>${c}</option>`).join('');
+}
+async function saveMovimento(){
+  const id=document.getElementById('mov-edit-id').value;
+  const rec={
+    tipo:document.getElementById('mov-tipo').value,
+    conta:document.getElementById('mov-conta').value,
+    data:document.getElementById('mov-data').value,
+    valor:parseFloat(document.getElementById('mov-valor').value)||0,
+    categoria:document.getElementById('mov-categoria').value,
+    descricao:document.getElementById('mov-descricao').value.trim(),
+    epoca:document.getElementById('mov-epoca').value
+  };
+  if(!rec.valor){toast('Introduz um valor');return;}
+  if(id){
+    await sb.from('caixa').update(rec).eq('id',id);
+    const idx=(DB_CAIXA.movimentos||[]).findIndex(x=>x.id===id);
+    if(idx>=0)DB_CAIXA.movimentos[idx]={...DB_CAIXA.movimentos[idx],...rec};
+  } else {
+    rec.id=uid();
+    const {error}=await sb.from('caixa').insert(rec);
+    if(!error){DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];DB_CAIXA.movimentos.unshift(rec);}
+  }
+  closeModal('modal-movimento');toast('✅ Movimento guardado!');renderCaixa();
+}
+async function deleteMovimento(id){
+  if(!confirm('Apagar este movimento?'))return;
+  await sb.from('caixa').delete().eq('id',id);
+  DB_CAIXA.movimentos=(DB_CAIXA.movimentos||[]).filter(x=>x.id!==id);
+  toast('🗑️ Movimento apagado');renderCaixa();
+}
+function openModalCaixaCategoria(){renderCatListas();openModal('modal-caixa-cat');}
+function renderCatListas(){
+  ['receita','despesa'].forEach(tipo=>{
+    const el=document.getElementById(`cat-${tipo}s-list`);if(!el)return;
+    const cats=(DB_CAIXA.categorias||{})[tipo]||[];
+    el.innerHTML=cats.map((c,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px">
+      <span style="flex:1">${c}</span>
+      ${cats.length>1?`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5;padding:2px 6px" onclick="removeCategoria('${tipo}',${i})">×</button>`:''}
+    </div>`).join('');
+  });
+}
+async function addCategoria(tipo){
+  const inp=document.getElementById(`cat-nova-${tipo}`);
+  const nome=(inp?.value||'').trim();
+  if(!nome)return;
+  DB_CAIXA.categorias=DB_CAIXA.categorias||{receita:[],despesa:[]};
+  if(!(DB_CAIXA.categorias[tipo]||[]).includes(nome)){
+    DB_CAIXA.categorias[tipo]=(DB_CAIXA.categorias[tipo]||[]);
+    DB_CAIXA.categorias[tipo].push(nome);
+    await sb.from('caixa_config').upsert({key:'categorias',value:JSON.stringify(DB_CAIXA.categorias)});
+    inp.value='';renderCatListas();toast('✅ Categoria adicionada!');
+  }
+}
+async function removeCategoria(tipo,idx){
+  if(!confirm('Remover esta categoria?'))return;
+  DB_CAIXA.categorias[tipo].splice(idx,1);
+  await sb.from('caixa_config').upsert({key:'categorias',value:JSON.stringify(DB_CAIXA.categorias)});
+  renderCatListas();toast('🗑️ Categoria removida');
+}
+async function fecharEpoca(){
+  const nova=(document.getElementById('nova-epoca-nome')?.value||'').trim();
+  if(!nova){alert('Introduz o nome da nova época');return;}
+  if(!confirm(`Fechar época actual e iniciar "${nova}"? O saldo transitará automaticamente.`))return;
+  // Calcular saldo actual da época corrente
+  const epocaAtual=_currentEpoca();
+  const movsEp=(DB_CAIXA.movimentos||[]).filter(m=>m.epoca===epocaAtual);
+  const saldoOficial=movsEp.filter(m=>m.conta==='oficial').reduce((a,m)=>a+(m.tipo==='receita'?1:-1)*(parseFloat(m.valor)||0),0);
+  const saldoDiario=movsEp.filter(m=>m.conta==='diario').reduce((a,m)=>a+(m.tipo==='receita'?1:-1)*(parseFloat(m.valor)||0),0);
+  // Inserir movimentos de transição
+  const transacoes=[];
+  if(Math.abs(saldoOficial)>0.01){
+    const t={id:uid(),tipo:saldoOficial>0?'receita':'despesa',conta:'oficial',data:new Date().toISOString().split('T')[0],valor:Math.abs(saldoOficial),categoria:'Saldo Transitado',descricao:`Saldo transitado da época ${epocaAtual}`,epoca:nova};
+    transacoes.push(t);
+  }
+  if(Math.abs(saldoDiario)>0.01){
+    const t={id:uid(),tipo:saldoDiario>0?'receita':'despesa',conta:'diario',data:new Date().toISOString().split('T')[0],valor:Math.abs(saldoDiario),categoria:'Saldo Transitado',descricao:`Saldo transitado da época ${epocaAtual}`,epoca:nova};
+    transacoes.push(t);
+  }
+  if(transacoes.length){await sb.from('caixa').insert(transacoes);DB_CAIXA.movimentos=[...transacoes,...(DB_CAIXA.movimentos||[])];}
+  // Actualizar época corrente
+  DB.config.epoca=nova;
+  await sb.from('config').upsert({key:'epoca',value:nova});
+  document.getElementById('nova-epoca-nome').value='';
+  closeModal('modal-caixa-cat');toast(`✅ Época fechada! Saldo transitado para ${nova}`);renderCaixa();
+}
+function gerarPDFCaixa(){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const corClube=getCorClube?getCorClube():'#8B1A1A';
+  const clubeNome=(DB.config?.clube_nome||document.querySelector('.clube-nome')?.textContent||'GestiOK').trim();
+  const epoca=_currentEpoca();
+  const W=210,mL=15,mR=15,cW=W-mL-mR;
+  let y=0;
+  // Cabeçalho
+  doc.setFillColor(corClube);doc.rect(0,0,W,28,'F');
+  try{if(window.LOGO_B64){const c=document.createElement('canvas');c.width=80;c.height=80;const ctx=c.getContext('2d');const img=new Image();img.src=window.LOGO_B64;img.onload=()=>{};ctx.drawImage(img,0,0,80,80);doc.addImage(c.toDataURL(),'JPEG',mL,2,24,24);}}catch(e){}
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(14);
+  doc.text(`${clubeNome} — Relatório de Caixa`,mL+28,12);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  doc.text(`Época: ${epoca} | Data: ${new Date().toLocaleDateString('pt-PT')}`,mL+28,20);
+  y=36;
+  // Resumo
+  const movs=DB_CAIXA.movimentos||[];
+  const movsEp=movs.filter(m=>!m.epoca||m.epoca===epoca);
+  const rec=movsEp.filter(m=>m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+  const desp=movsEp.filter(m=>m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+  doc.setTextColor(30,30,30);doc.setFont('helvetica','bold');doc.setFontSize(11);
+  doc.text('Resumo',mL,y);y+=7;
+  doc.setFont('helvetica','normal');doc.setFontSize(10);
+  doc.text(`Total Receitas: €${rec.toFixed(2)}`,mL,y);y+=6;
+  doc.text(`Total Despesas: €${desp.toFixed(2)}`,mL,y);y+=6;
+  doc.setFont('helvetica','bold');
+  doc.text(`Saldo: €${(rec-desp).toFixed(2)}`,mL,y);y+=10;
+  // Movimentos
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text('Movimentos',mL,y);y+=7;
+  doc.setFontSize(8);doc.setFont('helvetica','bold');
+  doc.setFillColor(240,240,240);doc.rect(mL,y-4,cW,6,'F');
+  doc.text('Data',mL+1,y);doc.text('Tipo',mL+25,y);doc.text('Conta',mL+50,y);doc.text('Categoria',mL+75,y);doc.text('Descrição',mL+110,y);doc.text('Valor €',mL+cW-15,y,{align:'right'});
+  y+=4;doc.setFont('helvetica','normal');
+  movsEp.slice(0,80).forEach(m=>{
+    if(y>270){doc.addPage();y=20;}
+    const isRec=m.tipo==='receita';
+    doc.setTextColor(isRec?5:180,isRec?100:0,isRec?0:0);
+    doc.text(m.data?new Date(m.data+'T00:00:00').toLocaleDateString('pt-PT'):'-',mL+1,y);
+    doc.setTextColor(30,30,30);
+    doc.text(isRec?'Receita':'Despesa',mL+25,y);
+    doc.text(m.conta==='oficial'?'Oficial':'Dia-a-Dia',mL+50,y);
+    doc.text((m.categoria||'-').substring(0,16),mL+75,y);
+    doc.text((m.descricao||'-').substring(0,24),mL+110,y);
+    doc.setTextColor(isRec?5:180,isRec?100:0,isRec?0:0);
+    doc.text(`€${parseFloat(m.valor||0).toFixed(2)}`,mL+cW-15,y,{align:'right'});
+    doc.setTextColor(30,30,30);
+    y+=5;
+  });
+  y+=5;doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(150,150,150);
+  doc.text(`GestiOK · ${clubeNome} · Exportado em ${new Date().toLocaleDateString('pt-PT')}`,W/2,285,{align:'center'});
+  doc.save(`caixa-${epoca.replace('/','_')}.pdf`);
+}
+
 // ═══ INIT ═══
 document.getElementById('ses-data').value=new Date().toISOString().split('T')[0];
 document.getElementById('conv-data').value=new Date().toISOString().split('T')[0];
-loadAllData().then(()=>{console.log('ADB Campo — dados carregados do Supabase');});
+loadAllData().then(async ()=>{await loadCaixa();console.log('ADB Campo — dados carregados do Supabase');});
 </script>
 </body>
 </html>
