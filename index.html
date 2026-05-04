@@ -5286,7 +5286,7 @@ async function gerarCartoesSocios(){
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const clubeNome=(DB.config?.clube_nome||document.querySelector('.clube-nome')?.textContent||'GestiOK').trim();
   const epoca=DB.config?.epoca||'2025/2026';
-  const corClube=getCorClube?getCorClube():'#8B1A1A';
+  const corClube=(typeof getCorClube==='function')?getCorClube():(DB.config?.clube_cor||getComputedStyle(document.documentElement).getPropertyValue('--red').trim()||'#8B1A1A');
   // CR80: 85.6 × 54mm — 4 por página (2 colunas × 2 linhas)
   const cW=85.6,cH=54;
   const marginX=(210-cW*2)/3; // margem lateral entre e fora dos cartões
