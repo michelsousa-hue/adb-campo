@@ -753,6 +753,7 @@ textarea.form-input{resize:vertical;min-height:70px}
           <div><div class="page-title">💰 Fluxo de Caixa</div><div class="page-sub">Receitas, despesas e balanço por época</div></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" onclick="openModalCaixaCategoria()" style="background:#F0FDF4;color:#166534;border-color:#86EFAC">⚙️ Categorias</button>
+            <button class="btn" onclick="openModalTransferencia()" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE">🔄 Transferência</button>
             <button class="btn btn-primary" onclick="openModalMovimento()">+ Movimento</button>
             <button class="btn" onclick="gerarPDFCaixa()">📄 Relatório PDF</button>
           </div>
@@ -763,8 +764,9 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
           <select class="form-input" id="caixa-fil-conta" onchange="renderCaixa()" style="max-width:160px">
             <option value="">Todas as contas</option>
-            <option value="oficial">Conta Oficial</option>
-            <option value="diario">Dia-a-Dia</option>
+            <option value="depositos">🏦 Depósitos</option>
+            <option value="caixa_fisica">💵 Caixa</option>
+            <option value="outros">📂 Outros Fluxos</option>
           </select>
           <select class="form-input" id="caixa-fil-tipo" onchange="renderCaixa()" style="max-width:150px">
             <option value="">Receitas e Despesas</option>
@@ -783,6 +785,42 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<!-- MODAL TRANSFERÊNCIA INTERNA -->
+<div id="modal-transferencia" class="modal-bg">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header"><span class="modal-title">🔄 Transferência Interna</span><button class="modal-close" onclick="closeModal('modal-transferencia')">✕</button></div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">Transfere dinheiro de Depósitos para Caixa (ex: levantamento via cheque). Não afecta o saldo global.</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="transf-data"></div>
+      <div class="form-group"><label class="form-label">Valor (€)</label><input type="number" class="form-input" id="transf-valor" min="0" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Descrição</label><input type="text" class="form-input" id="transf-descricao" placeholder="ex: Levantamento cheque nº 123"></div>
+    <div class="form-group" style="margin-bottom:16px"><label class="form-label">Época</label><select class="form-input" id="transf-epoca"></select></div>
+    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px;font-size:12px;color:#1D4ED8;margin-bottom:14px">
+      📌 Cria automaticamente:<br>• Débito em <b>Depósitos</b> (saída)<br>• Crédito em <b>Caixa</b> (entrada)
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveTransferencia()">Efectuar Transferência</button>
+      <button class="btn" onclick="closeModal('modal-transferencia')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SALDO INICIAL -->
+<div id="modal-saldo-inicial" class="modal-bg">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header"><span class="modal-title">🏁 Saldo Inicial de Época</span><button class="modal-close" onclick="closeModal('modal-saldo-inicial')">✕</button></div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">Define os saldos de arranque para a época actual. Usa quando os valores transitados precisam de correcção.</div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">🏦 Saldo inicial — Depósitos (€)</label><input type="number" class="form-input" id="si-depositos" min="0" step="0.01" placeholder="0.00"></div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">💵 Saldo inicial — Caixa (€)</label><input type="number" class="form-input" id="si-caixa" min="0" step="0.01" placeholder="0.00"></div>
+    <div class="form-group" style="margin-bottom:16px"><label class="form-label">📂 Saldo inicial — Outros Fluxos (€)</label><input type="number" class="form-input" id="si-outros" min="0" step="0.01" placeholder="0.00"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveSaldoInicial()">Guardar Saldos</button>
+      <button class="btn" onclick="closeModal('modal-saldo-inicial')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL MOVIMENTO CAIXA -->
 <div id="modal-movimento" class="modal-bg">
   <div class="modal" style="max-width:440px">
@@ -796,9 +834,10 @@ textarea.form-input{resize:vertical;min-height:70px}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Conta</label>
-        <select class="form-input" id="mov-conta">
-          <option value="oficial">Conta Oficial</option>
-          <option value="diario">Dia-a-Dia</option>
+        <select class="form-input" id="mov-conta" onchange="updateMovContaInfo()">
+          <option value="depositos">🏦 Depósitos</option>
+          <option value="caixa_fisica">💵 Caixa</option>
+          <option value="outros">📂 Outros Fluxos</option>
         </select>
       </div>
     </div>
@@ -845,6 +884,7 @@ textarea.form-input{resize:vertical;min-height:70px}
     <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200)">
       <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-bottom:10px;text-transform:uppercase">📅 Transição de Época</div>
       <div style="font-size:13px;color:var(--gray-500);margin-bottom:10px">Transfere o saldo actual para a nova época, mantendo histórico consultável.</div>
+    <button class="btn" onclick="openModalSaldoInicial()" style="background:#FEF3C7;color:#92400E;border-color:#FCD34D;font-size:13px;margin-bottom:10px">🏁 Definir Saldo Inicial</button>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="text" class="form-input" id="nova-epoca-nome" placeholder="ex: 2026/2027" style="max-width:160px">
         <button class="btn btn-primary" onclick="fecharEpoca()">Fechar Época e Transitar Saldo</button>
@@ -5145,6 +5185,8 @@ async function loadCaixa(){
   if(catR?.data?.length){
     const cfg=catR.data.find(x=>x.key==='categorias');
     if(cfg)try{DB_CAIXA.categorias=JSON.parse(cfg.value);}catch(e){}
+    const siCfg=catR.data.find(x=>x.key==='saldos_iniciais');
+    if(siCfg)try{DB_CAIXA.saldos_iniciais=JSON.parse(siCfg.value);}catch(e){}
   }
 }
 
@@ -5154,42 +5196,53 @@ function _epocas(){
 }
 function _currentEpoca(){return DB.config?.epoca||'2025/2026';}
 
+function _contaLabel(c){return c==='depositos'?'🏦 Depósitos':c==='caixa_fisica'?'💵 Caixa':c==='outros'?'📂 Outros Fluxos':c||'-';}
 function renderCaixa(){
   const movs=DB_CAIXA.movimentos||[];
   const filConta=(document.getElementById('caixa-fil-conta')?.value)||'';
   const filTipo=(document.getElementById('caixa-fil-tipo')?.value)||'';
   const search=((document.getElementById('caixa-search')?.value)||'').toLowerCase();
-  // Popular select de épocas
   const selEpoca=document.getElementById('caixa-fil-epoca');
   if(selEpoca){
     const curVal=selEpoca.value||_currentEpoca();
     selEpoca.innerHTML=`<option value="">Todas as épocas</option>`+_epocas().map(e=>`<option value="${e}" ${e===curVal?'selected':''}>${e}</option>`).join('');
   }
   const filEpoca=(document.getElementById('caixa-fil-epoca')?.value)||'';
+  // Excluir transferências internas dos totais globais
   const filtered=movs.filter(m=>
     (!filConta||m.conta===filConta)&&
     (!filTipo||m.tipo===filTipo)&&
     (!filEpoca||m.epoca===filEpoca)&&
     (!search||(m.descricao||'').toLowerCase().includes(search)||(m.categoria||'').toLowerCase().includes(search))
   );
-  // Resumo
   const resumo=document.getElementById('caixa-resumo');
   if(resumo){
-    const rec=filtered.filter(m=>m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
-    const desp=filtered.filter(m=>m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    // Movimentos reais (excluir transferências internas)
+    const reais=filtered.filter(m=>m.categoria!=='Transferência Interna');
+    const rec=reais.filter(m=>m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    const desp=reais.filter(m=>m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
     const saldo=rec-desp;
-    const recOf=filtered.filter(m=>m.tipo==='receita'&&m.conta==='oficial').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
-    const despOf=filtered.filter(m=>m.tipo==='despesa'&&m.conta==='oficial').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
-    const recDia=filtered.filter(m=>m.tipo==='receita'&&m.conta==='diario').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
-    const despDia=filtered.filter(m=>m.tipo==='despesa'&&m.conta==='diario').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+    // Por conta
+    const saldoConta=c=>{
+      const r=reais.filter(m=>m.conta===c&&m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+      const d=reais.filter(m=>m.conta===c&&m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+      // Saldo inicial
+      const si=(DB_CAIXA.saldos_iniciais||{})[_currentEpoca()]?.[c]||0;
+      return (r-d)+si;
+    };
+    const saldoDep=saldoConta('depositos');
+    const saldoCaixa=saldoConta('caixa_fisica');
+    const saldoOutros=saldoConta('outros');
+    const saldoOficial=saldoDep+saldoCaixa;
     resumo.innerHTML=`
       <div class="metric-card"><div class="metric-label">📈 Total Receitas</div><div class="metric-value metric-ok">€${rec.toFixed(2)}</div></div>
       <div class="metric-card"><div class="metric-label">📉 Total Despesas</div><div class="metric-value ${desp>0?'metric-danger':''}">€${desp.toFixed(2)}</div></div>
-      <div class="metric-card"><div class="metric-label">💰 Saldo</div><div class="metric-value ${saldo>=0?'metric-ok':'metric-danger'}">€${saldo.toFixed(2)}</div></div>
-      <div class="metric-card"><div class="metric-label">🏦 Conta Oficial</div><div class="metric-value ${(recOf-despOf)>=0?'metric-ok':'metric-danger'}">€${(recOf-despOf).toFixed(2)}</div></div>
-      <div class="metric-card"><div class="metric-label">💼 Dia-a-Dia</div><div class="metric-value ${(recDia-despDia)>=0?'metric-ok':'metric-danger'}">€${(recDia-despDia).toFixed(2)}</div></div>`;
+      <div class="metric-card"><div class="metric-label">💰 Saldo Global</div><div class="metric-value ${saldo>=0?'metric-ok':'metric-danger'}">€${(saldo+(Object.values((DB_CAIXA.saldos_iniciais||{})[_currentEpoca()]||{})).reduce((a,v)=>a+v,0)).toFixed(2)}</div></div>
+      <div class="metric-card" style="border-top:3px solid #1D4ED8"><div class="metric-label">🏦 Depósitos</div><div class="metric-value ${saldoDep>=0?'metric-ok':'metric-danger'}">€${saldoDep.toFixed(2)}</div></div>
+      <div class="metric-card" style="border-top:3px solid #059669"><div class="metric-label">💵 Caixa</div><div class="metric-value ${saldoCaixa>=0?'metric-ok':'metric-danger'}">€${saldoCaixa.toFixed(2)}</div></div>
+      <div class="metric-card" style="border-top:3px solid #7C3AED"><div class="metric-label">📂 Outros Fluxos</div><div class="metric-value ${saldoOutros>=0?'metric-ok':'metric-danger'}">€${saldoOutros.toFixed(2)}</div></div>
+      <div class="metric-card" style="border-top:3px solid #DC2626;grid-column:span 2"><div class="metric-label">🏛️ Contas Oficiais (Dep.+Caixa)</div><div class="metric-value ${saldoOficial>=0?'metric-ok':'metric-danger'}">€${saldoOficial.toFixed(2)}</div></div>`;
   }
-  // Lista
   const lista=document.getElementById('caixa-lista');
   if(!lista)return;
   if(!filtered.length){
@@ -5200,14 +5253,14 @@ function renderCaixa(){
     <th>Data</th><th>Tipo</th><th>Conta</th><th>Categoria</th><th>Descrição</th><th>Época</th><th style="text-align:right">Valor</th><th></th>
   </tr></thead><tbody>`+filtered.map(m=>`<tr>
     <td>${m.data?new Date(m.data+'T00:00:00').toLocaleDateString('pt-PT'):'-'}</td>
-    <td><span class="badge ${m.tipo==='receita'?'badge-ok':'badge-danger'}">${m.tipo==='receita'?'📈 Receita':'📉 Despesa'}</span></td>
-    <td><span style="font-size:11px;color:var(--gray-500)">${m.conta==='oficial'?'🏦 Oficial':'💼 Dia-a-Dia'}</span></td>
+    <td><span class="badge ${m.tipo==='receita'?'badge-ok':m.categoria==='Transferência Interna'?'':'badge-danger'}" style="${m.categoria==='Transferência Interna'?'background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE':''}">${m.categoria==='Transferência Interna'?'🔄 Transferência':m.tipo==='receita'?'📈 Receita':'📉 Despesa'}</span></td>
+    <td><span style="font-size:11px;color:var(--gray-500)">${_contaLabel(m.conta)}</span></td>
     <td>${m.categoria||'-'}</td>
     <td>${m.descricao||'-'}</td>
     <td style="font-size:11px;color:var(--gray-400)">${m.epoca||'-'}</td>
-    <td style="text-align:right;font-weight:600;color:${m.tipo==='receita'?'var(--green)':'#DC2626'}">€${parseFloat(m.valor||0).toFixed(2)}</td>
+    <td style="text-align:right;font-weight:600;color:${m.categoria==='Transferência Interna'?'#1D4ED8':m.tipo==='receita'?'var(--green)':'#DC2626'}">€${parseFloat(m.valor||0).toFixed(2)}</td>
     <td><div style="display:flex;gap:4px">
-      <button class="btn btn-sm" onclick="openModalMovimento('${m.id}')" style="color:#2563EB;border-color:#BFDBFE">✏️</button>
+      ${m.categoria!=='Transferência Interna'?`<button class="btn btn-sm" onclick="openModalMovimento('${m.id}')" style="color:#2563EB;border-color:#BFDBFE">✏️</button>`:''}
       <button class="btn btn-sm" onclick="deleteMovimento('${m.id}')" style="color:#DC2626;border-color:#FCA5A5">🗑️</button>
     </div></td>
   </tr>`).join('')+'</tbody></table>';
@@ -5218,7 +5271,7 @@ function openModalMovimento(id){
   document.getElementById('mov-edit-id').value=id||'';
   document.getElementById('mov-modal-title').textContent=m?'Editar Movimento':'Novo Movimento';
   document.getElementById('mov-tipo').value=m?.tipo||'receita';
-  document.getElementById('mov-conta').value=m?.conta||'oficial';
+  document.getElementById('mov-conta').value=m?.conta||'depositos';
   document.getElementById('mov-data').value=m?.data||new Date().toISOString().split('T')[0];
   document.getElementById('mov-valor').value=m?.valor||'';
   document.getElementById('mov-descricao').value=m?.descricao||'';
@@ -5300,18 +5353,20 @@ async function fecharEpoca(){
   // Calcular saldo actual da época corrente
   const epocaAtual=_currentEpoca();
   const movsEp=(DB_CAIXA.movimentos||[]).filter(m=>m.epoca===epocaAtual);
-  const saldoOficial=movsEp.filter(m=>m.conta==='oficial').reduce((a,m)=>a+(m.tipo==='receita'?1:-1)*(parseFloat(m.valor)||0),0);
-  const saldoDiario=movsEp.filter(m=>m.conta==='diario').reduce((a,m)=>a+(m.tipo==='receita'?1:-1)*(parseFloat(m.valor)||0),0);
+  const _saldoConta=(c)=>{
+    const si=(DB_CAIXA.saldos_iniciais||{})[epocaAtual]?.[c]||0;
+    return si+movsEp.filter(m=>m.conta===c&&m.categoria!=='Transferência Interna').reduce((a,m)=>a+(m.tipo==='receita'?1:-1)*(parseFloat(m.valor)||0),0);
+  };
+  const saldoDep=_saldoConta('depositos');
+  const saldoCaixaF=_saldoConta('caixa_fisica');
+  const saldoOutros=_saldoConta('outros');
   // Inserir movimentos de transição
   const transacoes=[];
-  if(Math.abs(saldoOficial)>0.01){
-    const t={id:uid(),tipo:saldoOficial>0?'receita':'despesa',conta:'oficial',data:new Date().toISOString().split('T')[0],valor:Math.abs(saldoOficial),categoria:'Saldo Transitado',descricao:`Saldo transitado da época ${epocaAtual}`,epoca:nova};
-    transacoes.push(t);
-  }
-  if(Math.abs(saldoDiario)>0.01){
-    const t={id:uid(),tipo:saldoDiario>0?'receita':'despesa',conta:'diario',data:new Date().toISOString().split('T')[0],valor:Math.abs(saldoDiario),categoria:'Saldo Transitado',descricao:`Saldo transitado da época ${epocaAtual}`,epoca:nova};
-    transacoes.push(t);
-  }
+  [['depositos',saldoDep],['caixa_fisica',saldoCaixaF],['outros',saldoOutros]].forEach(([c,s])=>{
+    if(Math.abs(s)>0.01){
+      transacoes.push({id:uid(),tipo:s>0?'receita':'despesa',conta:c,data:new Date().toISOString().split('T')[0],valor:Math.abs(s),categoria:'Saldo Transitado',descricao:`Saldo transitado da época ${epocaAtual}`,epoca:nova});
+    }
+  });
   if(transacoes.length){await sb.from('caixa').insert(transacoes);DB_CAIXA.movimentos=[...transacoes,...(DB_CAIXA.movimentos||[])];}
   // Actualizar época corrente
   DB.config.epoca=nova;
@@ -5319,6 +5374,56 @@ async function fecharEpoca(){
   document.getElementById('nova-epoca-nome').value='';
   closeModal('modal-caixa-cat');toast(`✅ Época fechada! Saldo transitado para ${nova}`);renderCaixa();
 }
+
+// ═══ TRANSFERÊNCIA INTERNA ═══
+function openModalTransferencia(){
+  const selEp=document.getElementById('transf-epoca');
+  const eps=_epocas();
+  selEp.innerHTML=eps.map(e=>`<option value="${e}" ${e===_currentEpoca()?'selected':''}>${e}</option>`).join('');
+  document.getElementById('transf-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('transf-valor').value='';
+  document.getElementById('transf-descricao').value='';
+  openModal('modal-transferencia');
+}
+async function saveTransferencia(){
+  const valor=parseFloat(document.getElementById('transf-valor').value)||0;
+  if(!valor){toast('Introduz um valor');return;}
+  const data=document.getElementById('transf-data').value;
+  const descricao=document.getElementById('transf-descricao').value.trim()||'Transferência Depósitos → Caixa';
+  const epoca=document.getElementById('transf-epoca').value;
+  const debito={id:uid(),tipo:'despesa',conta:'depositos',data,valor,categoria:'Transferência Interna',descricao,epoca};
+  const credito={id:uid(),tipo:'receita',conta:'caixa_fisica',data,valor,categoria:'Transferência Interna',descricao,epoca};
+  await sb.from('caixa').insert([debito,credito]);
+  DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];
+  DB_CAIXA.movimentos.unshift(credito,debito);
+  closeModal('modal-transferencia');
+  toast('✅ Transferência efectuada! Depósitos debitados, Caixa creditada.');
+  renderCaixa();
+}
+
+// ═══ SALDO INICIAL ═══
+function openModalSaldoInicial(){
+  const epoca=_currentEpoca();
+  const si=(DB_CAIXA.saldos_iniciais||{})[epoca]||{};
+  document.getElementById('si-depositos').value=si.depositos||'';
+  document.getElementById('si-caixa').value=si.caixa_fisica||'';
+  document.getElementById('si-outros').value=si.outros||'';
+  openModal('modal-saldo-inicial');
+}
+async function saveSaldoInicial(){
+  const epoca=_currentEpoca();
+  DB_CAIXA.saldos_iniciais=DB_CAIXA.saldos_iniciais||{};
+  DB_CAIXA.saldos_iniciais[epoca]={
+    depositos:parseFloat(document.getElementById('si-depositos').value)||0,
+    caixa_fisica:parseFloat(document.getElementById('si-caixa').value)||0,
+    outros:parseFloat(document.getElementById('si-outros').value)||0
+  };
+  await sb.from('caixa_config').upsert({key:'saldos_iniciais',value:JSON.stringify(DB_CAIXA.saldos_iniciais)});
+  closeModal('modal-saldo-inicial');
+  toast('✅ Saldos iniciais guardados!');
+  renderCaixa();
+}
+
 function gerarPDFCaixa(){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
