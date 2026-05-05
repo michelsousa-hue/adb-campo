@@ -4162,11 +4162,12 @@ function _renderSociosGestao(isCoord){
     const editBtns=isCoord?`<div style="display:flex;gap:4px">
       <button class="btn btn-sm" onclick="openModalSocio('${s.id}')" style="color:#2563EB;border-color:#BFDBFE">\u270f\ufe0f</button>
       <button class="btn btn-sm" onclick="deleteSocio('${s.id}')" style="color:#DC2626;border-color:#FCA5A5">\ud83d\uddd1\ufe0f</button>
+      ${s.cartao_impresso?`<button class="btn btn-sm" title="Reimprimir cartão" onclick="reimprimirCartao('${s.id}')" style="color:#7C3AED;border-color:#C4B5FD">🔄</button>`:''}
     </div>`:'';
     return`<div class="soc-card">
       <div class="soc-card-header">
         <div>
-          <div class="soc-card-name">${s.nome}${s.num_socio?` <span style="font-size:10px;color:var(--gray-400);font-weight:400">#${s.num_socio}</span>`:''}</div>
+          <div class="soc-card-name">${s.nome}${s.num_socio?` <span style="font-size:10px;color:var(--gray-400);font-weight:400">#${s.num_socio}</span>`:''} ${s.cartao_impresso?'<span title="Cartão impresso" style="font-size:11px">🪪</span>':''}</div>
           <div style="font-size:11px;color:var(--gray-400)">${s.tipo==='atleta'?'\ud83c\udfd2 Atleta':'\ud83d\udc64 Pai/Adepto'}${atleta?` \u2014 ${atleta.nome}`:''}</div>
         </div>
         ${editBtns}
@@ -4398,6 +4399,16 @@ async function saveSocio(){
   closeModal('modal-socio');
   toast('✅ Sócio guardado!');
   renderSocios();
+}
+
+async function reimprimirCartao(id){
+  const socio=(DB.socios||[]).find(s=>s.id===id);
+  if(!socio)return;
+  if(!confirm(`Reimprimir cartão de ${socio.nome}?`))return;
+  await sb.from('socios').update({cartao_impresso:false}).eq('id',id);
+  socio.cartao_impresso=false;
+  renderSocios();
+  toast(`🔄 ${socio.nome} marcado para reimprimir. Clica em Cartões para gerar.`);
 }
 
 async function deleteSocio(id){
@@ -5362,8 +5373,8 @@ function gerarPDFCaixa(){
 
 // ═══ CARTÕES DE SÓCIO CR80 ═══
 async function gerarCartoesSocios(){
-  const lista=(DB.socios||[]).filter(s=>s.estado==='Activo'&&s.quota==='Paga');
-  if(!lista.length){toast('Sem sócios activos com quota paga.');return;}
+  const lista=(DB.socios||[]).filter(s=>s.estado==='Activo'&&s.quota==='Paga'&&!s.cartao_impresso);
+  if(!lista.length){toast('✅ Todos os sócios já têm cartão impresso! Usa 🔄 para reimprimir.');return;}
   toast('A gerar cartões… aguarda');
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
@@ -5460,7 +5471,12 @@ async function gerarCartoesSocios(){
     doc.setLineDashPattern([],0);
   }
   doc.save(`cartoes-socios-${clubeNome.replace(/\s/g,'_')}.pdf`);
-  toast(`✅ ${lista.length} cartões gerados!`);
+  // Marcar como cartão impresso
+  const ids=lista.map(s=>s.id);
+  await sb.from('socios').update({cartao_impresso:true}).in('id',ids);
+  ids.forEach(id=>{const s=(DB.socios||[]).find(x=>x.id===id);if(s)s.cartao_impresso=true;});
+  renderSocios();
+  toast(`✅ ${lista.length} cartões gerados e marcados como impressos!`);
 }
 
 
