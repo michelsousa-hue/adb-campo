@@ -1463,8 +1463,8 @@ function setupForUser(){
 
   // Mostrar/esconder secções de nav por role
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=isAdmin?'':'none');
-  document.querySelectorAll('.tesour-only').forEach(el=>el.style.display=isTesour?'':'none');
-  document.querySelectorAll('.coord-only').forEach(el=>el.style.display=isCoordTec?'':'none');
+  document.querySelectorAll('.tesour-only').forEach(el=>el.style.display=(isTesour||isAdmin)?'':'none');
+  document.querySelectorAll('.coord-only').forEach(el=>el.style.display=(isCoordTec||isAdmin)?'':'none');
 
   // Admin vê tudo — mostrar também secções normais (já visíveis por defeito)
   // Tesoureiro — esconder secções desportivas
