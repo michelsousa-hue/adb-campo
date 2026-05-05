@@ -322,6 +322,14 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
   <div class="app-body">
     <nav class="sidebar" id="sidebar">
+      <div class="nav-section admin-only" style="display:none">Administração</div>
+      <div class="nav-item admin-only" data-page="admin" style="display:none"><span class="nav-icon">⚙️</span>Administração</div>
+      <div class="nav-section tesour-only" style="display:none">Tesouraria</div>
+      <div class="nav-item tesour-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
+      <div class="nav-item tesour-only" data-page="socios" style="display:none"><span class="nav-icon">🏅</span>Sócios</div>
+      <div class="nav-item tesour-only" data-page="caixa" style="display:none"><span class="nav-icon">💰</span>Fluxo de Caixa</div>
+      <div class="nav-section coord-only" style="display:none">Coordenação</div>
+      <div class="nav-item coord-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
       <div class="nav-section">Principal</div>
       <div class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span>Dashboard</div>
       <div class="nav-item" data-page="presencas"><span class="nav-icon">✅</span>Presenças</div>
@@ -336,13 +344,6 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div class="nav-item" data-page="convocatoria"><span class="nav-icon">📣</span>Convocatória</div>
       <div class="nav-section">Jogo</div>
       <div class="nav-item" data-page="jogo"><span class="nav-icon">🏒</span>Jogo ao Vivo</div>
-      <div class="nav-section coord-only" style="display:none">Administração</div>
-      <div class="nav-item coord-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
-      <div class="nav-item coord-only" data-page="admin" style="display:none"><span class="nav-icon">⚙️</span>Administração</div>
-      <div class="nav-section tesour-only" style="display:none">Tesouraria</div>
-      <div class="nav-item tesour-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
-      <div class="nav-item tesour-only" data-page="socios" style="display:none"><span class="nav-icon">🏅</span>Sócios</div>
-      <div class="nav-item tesour-only" data-page="caixa" style="display:none"><span class="nav-icon">💰</span>Fluxo de Caixa</div>
     </nav>
     <main class="main">
       <div id="page-dashboard" class="page active">
@@ -609,13 +610,19 @@ textarea.form-input{resize:vertical;min-height:70px}
           <button class="btn btn-primary" onclick="openModalDelegado()" style="font-size:13px">+ Novo Delegado</button>
         </div>
         <div class="card" style="margin-top:12px">
-          <div class="card-title" style="margin-bottom:12px">🏒 Perfis de Treinador</div>
+          <div class="card-title" style="margin-bottom:12px">🎯 Coordenador Técnico</div>
+          <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">Acesso completo à modalidade (atletas, treinos, jogos, metodologia, comunicados). Sem acesso à administração e tesouraria.</div>
+          <div id="admin-coordtec-list" style="margin-bottom:12px"></div>
+          <button class="btn" onclick="openModalPerfil('__coord__')" style="font-size:13px;background:#EDE9FE;color:#5B21B6;border-color:#C4B5FD">+ Novo Coord. Técnico</button>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-title" style="margin-bottom:8px">🏒 Perfis de Treinador</div>
           <div id="admin-perfis-list" style="margin-bottom:12px"></div>
           <button class="btn btn-primary" onclick="openModalPerfil()" style="font-size:13px">+ Novo Perfil</button>
         </div>
         <div class="card" style="margin-top:12px">
           <div class="card-title" style="margin-bottom:8px">💰 Tesoureiro</div>
-          <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">Acesso a Sócios, Fluxo de Caixa e Comunicados. Criado pela coordenação.</div>
+          <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">Acesso a Sócios, Fluxo de Caixa e Comunicados.</div>
           <div id="admin-tesour-list" style="margin-bottom:12px"></div>
           <button class="btn" onclick="openModalPerfil('__tesoureiro__')" style="font-size:13px;background:#ECFDF5;color:#166534;border-color:#86EFAC">+ Novo Tesoureiro</button>
         </div>
@@ -1019,8 +1026,9 @@ textarea.form-input{resize:vertical;min-height:70px}
     </div>
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Escalões (pode selecionar mais do que um)</label>
       <div id="perfil-grupos-checks" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
-      <div style="margin-top:6px"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="perfil-acesso-total"> <span style="color:var(--gray-500)">Acesso total (Coordenador)</span></label></div>
+      <div style="margin-top:6px"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="perfil-coord"> <span style="color:var(--gray-500)">🎯 Coordenador Técnico (Modalidade completa)</span></label></div>
       <div style="margin-top:4px"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="perfil-tesoureiro"> <span style="color:var(--gray-500)">💰 Tesoureiro (Sócios + Caixa + Comunicados)</span></label></div>
+      <div style="margin-top:4px"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" id="perfil-acesso-total" style="display:none"> </label></div>
     </div>
     <div class="form-group" style="margin-bottom:16px"><label class="form-label">PIN (4 dígitos)</label><input type="password" class="form-input" id="perfil-pin" maxlength="4" placeholder="1234"></div>
     <button class="btn btn-primary" style="width:100%" onclick="savePerfil()">Guardar Perfil</button>
@@ -1197,7 +1205,7 @@ let editingPinKey = null;
 let timerInterval = null;
 
 const profiles = [
-  {key:'coord',name:'Coordenador',role:'Acesso total',grupos:null},
+  {key:'coord',name:'Administrador',role:'admin',grupos:null},
   {key:'t1',name:'Treinador Sub9+Sub11',role:'Grupo 1',grupos:['Sub9+Sub11']},
   {key:'t2',name:'Treinador Sub13+Sub15',role:'Grupo 2',grupos:['Sub13+Sub15']},
 ];
@@ -1414,42 +1422,68 @@ function logout(){
 function renderLoginProfiles(){
   const list=document.getElementById('profile-list');
   if(!list)return;
-  const icons={coord:'🎯',mesa:'📋',tesoureiro:'💰'};
-  const bgs={coord:'#FEE2E2',mesa:'#FEF3C7',tesoureiro:'#D1FAE5'};
-  list.innerHTML=profiles.map((p,i)=>{
+  // Ordem: Admin → Tesoureiro(s) → Coord Tec(s) → Treinadores → Mesa
+  function roleOrder(p){
+    if(p.key==='coord')return 0;           // Admin fixo
+    if(p.role==='tesoureiro')return 1;
+    if(p.role==='coord')return 2;          // Coord Técnico
+    if(p.key==='mesa')return 4;
+    return 3;                              // Treinadores e outros
+  }
+  const sorted=[...profiles].sort((a,b)=>roleOrder(a)-roleOrder(b));
+  function profileCard(p,i,isMesa){
+    if(isMesa){
+      return`<div class="pin-profile" onclick="selectProfile('mesa')" id="profile-mesa" style="border-color:#F59E0B;background:#FFFBEB">
+        <div class="pin-profile-icon" style="background:#FEF3C7">📋</div>
+        <div><div class="pin-profile-name">Mesa de Jogo</div><div class="pin-profile-role">Registo do jogo</div></div>
+      </div>`;
+    }
+    const isAdmin=p.key==='coord';
     const isTesour=p.role==='tesoureiro';
-    const icon=icons[p.key]||icons[p.role]||(isTesour?'💰':'🏒');
-    const bg=bgs[p.key]||bgs[p.role]||(isTesour?'#D1FAE5':'#DBEAFE');
-    const border=isTesour?'style="border-color:#10B981;background:#ECFDF5"':'';
-    return`<div class="pin-profile" onclick="selectProfile(${i})" id="profile-${i}" ${border}>
+    const isCoordTec=p.role==='coord';
+    const icon=isAdmin?'🛡️':isTesour?'💰':isCoordTec?'🎯':'🏒';
+    const bg=isAdmin?'#FEE2E2':isTesour?'#D1FAE5':isCoordTec?'#EDE9FE':'#DBEAFE';
+    const border=isAdmin?'border-color:#DC2626':isTesour?'border-color:#10B981':isCoordTec?'border-color:#7C3AED':'';
+    const roleLabel=isAdmin?'⚙️ Administração':isTesour?'💰 Tesouraria':isCoordTec?'🎯 Coordenação':'🏒 '+(p.grupos?p.grupos.join('+'):p.role||p.name);
+    const idx=profiles.indexOf(p);
+    return`<div class="pin-profile" onclick="selectProfile(${idx})" id="profile-${idx}" style="${border?border+';background:'+(isAdmin?'#FFF5F5':isTesour?'#ECFDF5':isCoordTec?'#F5F3FF':''):''}">
       <div class="pin-profile-icon" style="background:${bg}">${icon}</div>
-      <div><div class="pin-profile-name">${p.name}</div><div class="pin-profile-role">${isTesour?'💰 Tesouraria':p.role||p.name}</div></div>
+      <div><div class="pin-profile-name">${p.name}</div><div class="pin-profile-role">${roleLabel}</div></div>
     </div>`;
-  }).join('')+`<div class="pin-profile" onclick="selectProfile('mesa')" id="profile-mesa" style="border-color:#F59E0B;background:#FFFBEB">
-    <div class="pin-profile-icon" style="background:#FEF3C7">📋</div>
-    <div><div class="pin-profile-name">Mesa de Jogo</div><div class="pin-profile-role">Registo do jogo</div></div>
-  </div>`;
+  }
+  list.innerHTML=sorted.map(p=>profileCard(p,profiles.indexOf(p),false)).join('')
+    +profileCard(null,null,true);
 }
 function setupForUser(){
-  const isCoord=currentUser.key==='coord';
+  const isAdmin=currentUser.key==='coord';          // Admin fixo (key coord mantém-se internamente)
   const isMesa=currentUser.key==='mesa';
   const isTesour=currentUser.role==='tesoureiro';
-  document.querySelectorAll('.coord-only').forEach(el=>el.style.display=isCoord?'':'none');
+  const isCoordTec=currentUser.role==='coord';      // Coordenador Técnico criado pelo Admin
+  const isTreinador=!isAdmin&&!isMesa&&!isTesour&&!isCoordTec;
+
+  // Mostrar/esconder secções de nav por role
+  document.querySelectorAll('.admin-only').forEach(el=>el.style.display=isAdmin?'':'none');
   document.querySelectorAll('.tesour-only').forEach(el=>el.style.display=isTesour?'':'none');
-  if(!isCoord){
-    document.querySelector('[data-page="admin"]')?.style && (document.querySelector('[data-page="admin"]').style.display='none');
-    if(currentUser.key==='t2')document.querySelector('[data-page="avaliacao"]').style.display='none';
+  document.querySelectorAll('.coord-only').forEach(el=>el.style.display=isCoordTec?'':'none');
+
+  // Admin vê tudo — mostrar também secções normais (já visíveis por defeito)
+  // Tesoureiro — esconder secções desportivas
+  if(isTesour){
+    document.querySelectorAll('.nav-section:not(.tesour-only)').forEach(el=>el.style.display='none');
+    document.querySelectorAll('.nav-item[data-page]:not(.tesour-only)').forEach(el=>el.style.display='none');
   }
-  // Mesa de Jogo: esconder tudo exceto Jogo ao Vivo
+  // Mesa de Jogo: só Jogo ao Vivo
   if(isMesa){
     document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
       el.style.display=el.dataset.page==='jogo'?'':'none';
     });
     document.querySelectorAll('.nav-section').forEach(el=>el.style.display='none');
   }
-  // Set default group based on profile
-  const defaultGrupo = currentUser.key==='t1' ? 'Sub9+Sub11' : 'Sub13+Sub15';
-  Object.keys(currentGrupo).forEach(k => currentGrupo[k] = defaultGrupo);
+  // Treinador t2: sem avaliação
+  if(currentUser.key==='t2')document.querySelector('[data-page="avaliacao"]')&&(document.querySelector('[data-page="avaliacao"]').style.display='none');
+  // Set default group
+  const defaultGrupo=currentUser.key==='t1'?'Sub9+Sub11':'Sub13+Sub15';
+  Object.keys(currentGrupo).forEach(k=>currentGrupo[k]=defaultGrupo);
 }
 function doLoginMesa(){
   // PIN para Mesa de Jogo guardado na config
@@ -3118,7 +3152,7 @@ async function apagarJogo(id){
 // ═══ ADMIN ═══
 function renderAdmin(){
   document.getElementById('epoca-label').textContent=DB.config.epoca;
-  document.getElementById('pins-tbody').innerHTML=profiles.map(p=>`<tr><td>${p.name}</td><td><span style="font-family:var(--mono)">••••</span></td><td style="display:flex;gap:6px"><button class="btn btn-sm" onclick="openChangePIN('${p.key}','${p.name}')">Alterar PIN</button>${p.key!=='coord'?`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>`:''}</td></tr>`).join('');
+  document.getElementById('pins-tbody').innerHTML=profiles.map(p=>`<tr><td>${p.name}</td><td><span style="font-family:var(--mono)">••••</span></td><td style="display:flex;gap:6px"><button class="btn btn-sm" onclick="openChangePIN('${p.key}','${p.name}')">Alterar PIN</button>${p.key!=='coord'&&p.key!=='mesa'?`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>`:''}</td></tr>`).join('');
   document.getElementById('admin-metrics').innerHTML=`<div class="metric-card"><div class="metric-label">Total jogadores</div><div class="metric-value">${DB.jogadores.length}</div></div><div class="metric-card"><div class="metric-label">Sessões</div><div class="metric-value">${DB.sessoes.length}</div></div>${GRUPOS.map(g=>`<div class="metric-card"><div class="metric-label">${g}</div><div class="metric-value">${jogsDoGrupo(g).length}</div></div>`).join('')}`;
   renderAdminIdentidade();
   renderAdminDelegados();
@@ -3330,7 +3364,7 @@ async function loadMetodologia(){
 
 function renderMetodologia(){
   // Show/hide edit button for coord
-  const isCoord=!currentUser?.grupos;
+  const isCoord=!currentUser?.grupos&&currentUser?.role!=='tesoureiro';
   const btnNova=document.getElementById('btn-nova-met');
   if(btnNova) btnNova.style.display=isCoord?'inline-flex':'none';
 
@@ -3419,7 +3453,7 @@ function removeMetFicheiro(){
 }
 
 function openModalMetodologia(id){
-  const isCoord=!currentUser?.grupos;
+  const isCoord=!currentUser?.grupos&&currentUser?.role!=='tesoureiro';
   if(!isCoord){toast('Apenas o coordenador pode editar a metodologia.');return;}
   const s=id?(DB.metodologia||[]).find(x=>x.id===id):null;
   metFileB64=null;metFileMime=null;metFileRemoved=false;
@@ -3444,7 +3478,7 @@ function openModalMetodologia(id){
 }
 
 async function saveMetodologia(){
-  const isCoord=!currentUser?.grupos;
+  const isCoord=!currentUser?.grupos&&currentUser?.role!=='tesoureiro';
   if(!isCoord){toast('Sem permissão.');return;}
   const titulo=document.getElementById('met-titulo').value.trim();
   if(!titulo){alert('Introduz um título para a secção');return;}
@@ -3521,7 +3555,7 @@ function renderFichaClinico(jid){
   const estadoCls=estado==='Apto'?'clin-apto':estado==='Lesionado'?'clin-lesionado':'clin-observacao';
   const peso=clinData.peso||'—';const altura=clinData.altura||'—';
   const imc=(clinData.peso&&clinData.altura)?(clinData.peso/(clinData.altura/100)**2).toFixed(1):'—';
-  const isCoord=!currentUser?.grupos;
+  const isCoord=!currentUser?.grupos&&currentUser?.role!=='tesoureiro';
   div.innerHTML=`
     <div class="clin-header-card">
       ${j.foto?`<img class="clin-avatar" src="${j.foto}" alt="${j.nome}">`:`<div class="clin-avatar-ini">${ini}</div>`}
@@ -4091,7 +4125,7 @@ function _socFiltered(){
 
 function renderSocios(){
   const isTesour=currentUser?.role==='tesoureiro';
-  const isCoord=currentUser?.key==='coord';
+  const isCoord=currentUser?.key==='coord'||currentUser?.role==='coord';
   const canAccess=isTesour||isCoord;
   // Sócios visível só para tesoureiro (e coord em modo legado)
   document.querySelectorAll('[data-page="socios"]').forEach(el=>el.style.display=(isTesour?'flex':'none'));
@@ -4294,8 +4328,8 @@ function _nextNumSocio(){
 }
 
 function openModalSocio(id){
-  const isCoord=!currentUser?.grupos;
-  if(!isCoord){toast('Apenas o coordenador pode gerir sócios.');return;}
+  const isCoord=!currentUser?.grupos&&currentUser?.role!=='tesoureiro';
+  if(!isCoord&&!isTesour){toast('Sem permissão para gerir sócios.');return;}
   const s=id?(DB.socios||[]).find(x=>x.id===id):null;
   document.getElementById('soc-edit-id').value=id||'';
   document.getElementById('modal-soc-title').textContent=s?'Editar Sócio':'Novo Sócio';
@@ -4329,7 +4363,7 @@ function openModalSocio(id){
 }
 
 async function saveSocio(){
-  const isCoord=!currentUser?.grupos;
+  const isCoord=!currentUser?.grupos&&currentUser?.role!=='tesoureiro';
   if(!isCoord){toast('Sem permissão.');return;}
   const tipo=document.getElementById('soc-tipo').value;
   const atleta_id=tipo==='atleta'?(document.getElementById('soc-atleta-id').value||null):null;
@@ -4520,7 +4554,7 @@ async function deleteDelegado(id){
 
 function renderAdminPerfis(){
   const el=document.getElementById('admin-perfis-list');if(!el)return;
-  const treinadores=profiles.filter(p=>p.key!=='coord'&&p.role!=='tesoureiro');
+  const treinadores=profiles.filter(p=>p.key!=='coord'&&p.role!=='tesoureiro'&&p.role!=='coord');
   el.innerHTML=treinadores.length?treinadores.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
     <div style="flex:1">
       <strong>${p.name}</strong>
@@ -4532,6 +4566,7 @@ function renderAdminPerfis(){
   </div>`).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px 0">Sem treinadores criados.</div>';
   // Lista tesoureiros
   const elT=document.getElementById('admin-tesour-list');if(!elT)return;
+  const coordTecs=profiles.filter(p=>p.role==='coord');
   const tesoureiros=profiles.filter(p=>p.role==='tesoureiro');
   elT.innerHTML=tesoureiros.length?tesoureiros.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
     <div style="flex:1">
@@ -4541,6 +4576,14 @@ function renderAdminPerfis(){
     <button class="btn btn-sm" onclick="openModalPerfil('${p.key}')">✏️ Editar</button>
     <button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>
   </div>`).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px 0">Sem tesoureiro criado.</div>';
+  // Lista coordenadores técnicos
+  const elC=document.getElementById('admin-coordtec-list');if(elC){
+    elC.innerHTML=coordTecs.length?coordTecs.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px">
+      <div style="flex:1"><strong>${p.name}</strong>${p.cont?`<div style="font-size:11px;color:var(--gray-500);margin-top:2px">${p.cont}</div>`:''}</div>
+      <button class="btn btn-sm" onclick="openModalPerfil('${p.key}')">✏️ Editar</button>
+      <button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>
+    </div>`).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px 0">Sem coordenador técnico criado.</div>';
+  }
 }
 function renderAdminGrupos(){
   const el=document.getElementById('admin-grupos-list');if(!el)return;
@@ -4551,9 +4594,10 @@ function renderAdminGrupos(){
 }
 function openModalPerfil(key){
   const presetTesour=key==='__tesoureiro__';
+  const presetCoord=key==='__coord__';
   const p=key&&!presetTesour?profiles.find(x=>x.key===key):null;
   document.getElementById('perfil-edit-key').value=p?p.key:'';
-  document.getElementById('modal-perfil-title').textContent=p?'Editar Perfil':(presetTesour?'Novo Tesoureiro':'Novo Perfil');
+  document.getElementById('modal-perfil-title').textContent=p?'Editar Perfil':(presetTesour?'Novo Tesoureiro':presetCoord?'Novo Coordenador Técnico':'Novo Perfil');
   document.getElementById('perfil-nome').value=p?p.name:'';
   document.getElementById('perfil-licenca').value=p?p.licenca||'':'';
   document.getElementById('perfil-cont').value=p?p.cont||'':'';
@@ -4564,7 +4608,8 @@ function openModalPerfil(key){
     <input type="checkbox" value="${g}" ${p&&(p.grupos||[]).includes(g)?'checked':''}>
     <span>${g}</span>
   </label>`).join('');
-  document.getElementById('perfil-acesso-total').checked=p&&!p.grupos&&p.role!=='tesoureiro';
+  document.getElementById('perfil-acesso-total').checked=p&&!p.grupos&&p.role!=='tesoureiro'&&p.role!=='coord';
+  document.getElementById('perfil-coord').checked=(p&&p.role==='coord')||presetCoord;
   document.getElementById('perfil-tesoureiro').checked=(p&&p.role==='tesoureiro')||presetTesour;
   openModal('modal-perfil');
 }
@@ -4578,7 +4623,8 @@ async function savePerfil(){
   const acessoTotal=document.getElementById('perfil-acesso-total').checked;
   const isTesour=document.getElementById('perfil-tesoureiro').checked;
   const grupos=acessoTotal||isTesour?null:[...document.querySelectorAll('#perfil-grupos-checks input:checked')].map(x=>x.value);
-  const roleVal=isTesour?'tesoureiro':(acessoTotal?'Acesso total':grupos?grupos.join('+'):nome);
+  const isCoordTec=document.getElementById('perfil-coord')?.checked||false;
+  const roleVal=isTesour?'tesoureiro':isCoordTec?'coord':(acessoTotal?'Acesso total':grupos?grupos.join('+'):nome);
   if(editKey){
     const p=profiles.find(x=>x.key===editKey);
     if(p){p.name=nome;p.grupos=grupos;p.role=roleVal;p.licenca=licenca;p.cont=cont;if(pin&&pin.length===4)DB.config.pins[editKey]=pin;}
@@ -5333,8 +5379,12 @@ async function gerarCartoesSocios(){
   const hexCor=DB.config?.clube_cor||getComputedStyle(document.documentElement).getPropertyValue('--red').trim()||'#8B1A1A';
   function hexRgb(hex){const h=hex.replace('#','');const r=parseInt(h.substring(0,2),16);const g=parseInt(h.substring(2,4),16);const b=parseInt(h.substring(4,6),16);return[r,g,b];}
   const [cr,cg,cb]=hexRgb(hexCor.startsWith('#')?hexCor:'#8B1A1A');
-  // Logo
-  const logoSrc=typeof LOGO_B64!=='undefined'?LOGO_B64:(window.LOGO_B64||null);
+  // Logo — usar base64 directo sem canvas para evitar fundo branco
+  let logoSrc=null;
+  try{
+    const rawLogo=DB.config?.clube_logo||(typeof LOGO_B64!=='undefined'?('data:image/jpeg;base64,'+LOGO_B64):null);
+    if(rawLogo)logoSrc=rawLogo;
+  }catch(e){}
   // Gerar QR code como canvas usando API pública (data URI)
   async function qrDataUrl(text){
     return new Promise(resolve=>{
@@ -5363,7 +5413,10 @@ async function gerarCartoesSocios(){
     doc.rect(x,y+8,cW,6,'F'); // retângulo extra para quadricular cantos inferiores do header
     // Logo no cabeçalho
     if(logoSrc){
-      try{doc.addImage(logoSrc,'JPEG',x+2,y+1,12,12);}catch(e){}
+      try{
+        const mime=logoSrc.includes('png')?'PNG':'JPEG';
+        doc.addImage(logoSrc,mime,x+2,y+1,12,12);
+      }catch(e){}
     }
     // Nome do clube no header
     doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
