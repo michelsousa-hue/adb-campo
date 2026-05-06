@@ -5314,15 +5314,15 @@ function renderCaixa(){
   );
   const resumo=document.getElementById('caixa-resumo');
   if(resumo){
-    // Movimentos reais (excluir transferências internas)
+    // Movimentos reais (excluir transferências internas do saldo global)
     const reais=filtered.filter(m=>m.categoria!=='Transferência Interna');
     const rec=reais.filter(m=>m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
     const desp=reais.filter(m=>m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
     const saldo=rec-desp;
-    // Por conta
+    // Por conta — incluir transferências internas (afectam saldo de cada conta mas não o global)
     const saldoConta=c=>{
-      const r=reais.filter(m=>m.conta===c&&m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
-      const d=reais.filter(m=>m.conta===c&&m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+      const r=filtered.filter(m=>m.conta===c&&m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+      const d=filtered.filter(m=>m.conta===c&&m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
       // Saldo inicial
       const si=(DB_CAIXA.saldos_iniciais||{})[_currentEpoca()]?.[c]||0;
       return (r-d)+si;
