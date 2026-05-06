@@ -789,14 +789,30 @@ textarea.form-input{resize:vertical;min-height:70px}
 <div id="modal-transferencia" class="modal-bg">
   <div class="modal" style="max-width:400px">
     <div class="modal-header"><span class="modal-title">🔄 Transferência Interna</span><button class="modal-close" onclick="closeModal('modal-transferencia')">✕</button></div>
-    <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">Transfere dinheiro de Depósitos para Caixa (ex: levantamento via cheque). Não afecta o saldo global.</div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">Move dinheiro entre contas. Não afecta o saldo global.</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Conta de Origem</label>
+        <select class="form-input" id="transf-origem" onchange="updateTransfInfo()">
+          <option value="depositos">🏦 Depósitos</option>
+          <option value="caixa_fisica">💵 Caixa</option>
+          <option value="outros">📂 Outros Fluxos</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Conta de Destino</label>
+        <select class="form-input" id="transf-destino" onchange="updateTransfInfo()">
+          <option value="caixa_fisica">💵 Caixa</option>
+          <option value="depositos">🏦 Depósitos</option>
+          <option value="outros">📂 Outros Fluxos</option>
+        </select>
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="transf-data"></div>
       <div class="form-group"><label class="form-label">Valor (€)</label><input type="number" class="form-input" id="transf-valor" min="0" step="0.01" placeholder="0.00"></div>
     </div>
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Descrição</label><input type="text" class="form-input" id="transf-descricao" placeholder="ex: Levantamento cheque nº 123"></div>
     <div class="form-group" style="margin-bottom:16px"><label class="form-label">Época</label><select class="form-input" id="transf-epoca"></select></div>
-    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px;font-size:12px;color:#1D4ED8;margin-bottom:14px">
+    <div id="transf-info" style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px;font-size:12px;color:#1D4ED8;margin-bottom:14px">
       📌 Cria automaticamente:<br>• Débito em <b>Depósitos</b> (saída)<br>• Crédito em <b>Caixa</b> (entrada)
     </div>
     <div style="display:flex;gap:8px">
@@ -4396,6 +4412,7 @@ function _nextNumSocio(){
 
 function openModalSocio(id){
   const isCoord=!currentUser?.grupos&&currentUser?.role!=='tesoureiro';
+  const isTesour=currentUser?.role==='tesoureiro';
   if(!isCoord&&!isTesour){toast('Sem permissão para gerir sócios.');return;}
   const s=id?(DB.socios||[]).find(x=>x.id===id):null;
   document.getElementById('soc-edit-id').value=id||'';
@@ -4431,7 +4448,8 @@ function openModalSocio(id){
 
 async function saveSocio(){
   const isCoord=!currentUser?.grupos&&currentUser?.role!=='tesoureiro';
-  if(!isCoord){toast('Sem permissão.');return;}
+  const isTesour=currentUser?.role==='tesoureiro';
+  if(!isCoord&&!isTesour){toast('Sem permissão.');return;}
   const tipo=document.getElementById('soc-tipo').value;
   const atleta_id=tipo==='atleta'?(document.getElementById('soc-atleta-id').value||null):null;
   const atleta=atleta_id?DB.jogadores.find(x=>x.id===atleta_id):null;
@@ -5440,16 +5458,28 @@ function openModalTransferencia(){
   document.getElementById('transf-data').value=new Date().toISOString().split('T')[0];
   document.getElementById('transf-valor').value='';
   document.getElementById('transf-descricao').value='';
+  document.getElementById('transf-origem').value='depositos';
+  document.getElementById('transf-destino').value='caixa_fisica';
+  updateTransfInfo();
   openModal('modal-transferencia');
+}
+function updateTransfInfo(){
+  const origem=document.getElementById('transf-origem')?.value||'depositos';
+  const destino=document.getElementById('transf-destino')?.value||'caixa_fisica';
+  const el=document.getElementById('transf-info');
+  if(el)el.innerHTML=`📌 Cria automaticamente:<br>• Débito em <b>${_contaLabel(origem)}</b> (saída)<br>• Crédito em <b>${_contaLabel(destino)}</b> (entrada)`;
 }
 async function saveTransferencia(){
   const valor=parseFloat(document.getElementById('transf-valor').value)||0;
   if(!valor){toast('Introduz um valor');return;}
+  const origem=document.getElementById('transf-origem').value||'depositos';
+  const destino=document.getElementById('transf-destino').value||'caixa_fisica';
+  if(origem===destino){toast('Origem e destino não podem ser iguais');return;}
   const data=document.getElementById('transf-data').value;
-  const descricao=document.getElementById('transf-descricao').value.trim()||'Transferência Depósitos → Caixa';
+  const descricao=document.getElementById('transf-descricao').value.trim()||`Transferência ${_contaLabel(origem)} → ${_contaLabel(destino)}`;
   const epoca=document.getElementById('transf-epoca').value;
-  const debito={id:uid(),tipo:'despesa',conta:'depositos',data,valor,categoria:'Transferência Interna',descricao,epoca};
-  const credito={id:uid(),tipo:'receita',conta:'caixa_fisica',data,valor,categoria:'Transferência Interna',descricao,epoca};
+  const debito={id:uid(),tipo:'despesa',conta:origem,data,valor,categoria:'Transferência Interna',descricao,epoca};
+  const credito={id:uid(),tipo:'receita',conta:destino,data,valor,categoria:'Transferência Interna',descricao,epoca};
   await sb.from('caixa').insert([debito,credito]);
   DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];
   DB_CAIXA.movimentos.unshift(credito,debito);
