@@ -844,6 +844,23 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<!-- MODAL AUTH CAIXA -->
+<div id="modal-caixa-auth" class="modal-bg">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-header"><span class="modal-title">🔐 Acesso ao Fluxo de Caixa</span></div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Esta área é restrita ao Tesoureiro. Introduz a tua password para continuar.</div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Password</label>
+      <input type="password" class="form-input" id="caixa-auth-pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter')verifyCaixaAuth()">
+    </div>
+    <div id="caixa-auth-erro" style="color:#DC2626;font-size:12px;margin-bottom:10px;display:none">❌ Password incorrecta. Tenta novamente.</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="verifyCaixaAuth()">Entrar</button>
+      <button class="btn" onclick="closeModal('modal-caixa-auth')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL MOVIMENTO CAIXA -->
 <div id="modal-movimento" class="modal-bg">
   <div class="modal" style="max-width:440px">
@@ -1474,6 +1491,7 @@ function pinEnter(){
   }
 }
 function logout(){
+  _caixaDesbloqueada=false;
   currentUser=null;currentPin='';selectedProfile=null;
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
@@ -1558,9 +1576,50 @@ function doLoginMesa(){
   document.querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
 }
 
+
+// ═══ AUTH CAIXA ═══
+let _caixaDesbloqueada = false;
+
+function _caixaPwdHash(pwd){
+  // Hash simples para comparação — o PIN do tesoureiro está nos profiles/pins
+  return pwd;
+}
+
+function tryAccessCaixa(callback){
+  if(_caixaDesbloqueada){ callback(); return; }
+  // Guardar callback para executar após auth
+  window._caixaAuthCallback = callback;
+  document.getElementById('caixa-auth-pwd').value='';
+  document.getElementById('caixa-auth-erro').style.display='none';
+  openModal('modal-caixa-auth');
+  setTimeout(()=>document.getElementById('caixa-auth-pwd').focus(),100);
+}
+
+function verifyCaixaAuth(){
+  const pwd = document.getElementById('caixa-auth-pwd').value;
+  // Verificar contra o PIN do tesoureiro guardado nos pins
+  const pins = DB.config?.pins || {};
+  const tesoureiroPerfil = profiles.find(p=>p.role==='tesoureiro');
+  const tesouPin = tesoureiroPerfil ? (pins[tesoureiroPerfil.key]||'') : '';
+  if(pwd && (pwd === tesouPin)){
+    _caixaDesbloqueada = true;
+    closeModal('modal-caixa-auth');
+    if(window._caixaAuthCallback){ window._caixaAuthCallback(); window._caixaAuthCallback=null; }
+    toast('✅ Acesso autorizado!');
+  } else {
+    document.getElementById('caixa-auth-erro').style.display='block';
+    document.getElementById('caixa-auth-pwd').value='';
+    document.getElementById('caixa-auth-pwd').focus();
+  }
+}
+
 // ═══ NAV ═══
 function navGo(el){
   const p=el.dataset.page; if(!p)return;
+  if(p==='caixa'&&!_caixaDesbloqueada){
+    tryAccessCaixa(()=>navGo(el));
+    return;
+  }
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   el.classList.add('active');
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
