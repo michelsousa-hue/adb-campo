@@ -787,6 +787,25 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div class="card" style="padding:0;overflow:hidden">
           <div id="caixa-lista"></div>
         </div>
+
+        <!-- ── FACTURAS / CONTAS A PAGAR ── -->
+        <div style="margin-top:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div><div class="page-title" style="font-size:16px">📋 Contas a Pagar</div><div class="page-sub">Facturas e dívidas a fornecedores</div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <select class="form-input" id="fact-fil-estado" onchange="renderFacturas()" style="max-width:150px">
+                <option value="">Todas</option>
+                <option value="pendente">🔴 Pendentes</option>
+                <option value="paga">✅ Pagas</option>
+              </select>
+              <input type="date" class="form-input" id="fact-fil-data" onchange="renderFacturas()" title="Filtrar por data de vencimento" style="max-width:160px">
+              <button class="btn btn-primary" onclick="openModalFactura()">+ Lançar Factura</button>
+            </div>
+          </div>
+          <div class="card" style="padding:0;overflow:hidden">
+            <div id="facturas-lista"></div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -857,6 +876,43 @@ textarea.form-input{resize:vertical;min-height:70px}
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" style="flex:1" onclick="verifyCaixaAuth()">Entrar</button>
       <button class="btn" onclick="closeModal('modal-caixa-auth')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL FACTURA -->
+<div id="modal-factura" class="modal-bg">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header"><span class="modal-title" id="modal-factura-title">📋 Nova Factura</span><button class="modal-close" onclick="closeModal('modal-factura')">✕</button></div>
+    <input type="hidden" id="fact-edit-id">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Fornecedor</label><input type="text" class="form-input" id="fact-fornecedor" placeholder="Ex: Empresa XYZ"></div>
+      <div class="form-group"><label class="form-label">Nº Factura</label><input type="text" class="form-input" id="fact-numero" placeholder="Ex: FT2026/001"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Valor (€)</label><input type="number" class="form-input" id="fact-valor" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Data Vencimento</label><input type="date" class="form-input" id="fact-vencimento"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Categoria</label>
+        <select class="form-input" id="fact-categoria">
+          <option>Material Desportivo</option>
+          <option>Aluguer de Instalações</option>
+          <option>Transportes</option>
+          <option>Seguros</option>
+          <option>Serviços Externos</option>
+          <option>Comunicações</option>
+          <option>Manutenção</option>
+          <option>Outros</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Época</label><select class="form-input" id="fact-epoca"></select></div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px"><label class="form-label">Notas</label><input type="text" class="form-input" id="fact-notas" placeholder="Observações opcionais"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveFactura()">Guardar</button>
+      <button class="btn" onclick="closeModal('modal-factura')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1630,7 +1686,7 @@ document.getElementById('sidebar').addEventListener('click',e=>{
   const el=e.target.closest('.nav-item[data-page]'); if(el)navGo(el);
 });
 function renderPage(p){
-  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:renderCaixa};
+  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();}};
   if(map[p])map[p]();
 }
 function buildGrupoTabs(cid,pageKey){
@@ -4836,6 +4892,12 @@ async function savePerfil(){
   const roleVal=isTesour?'tesoureiro':isCoordTec?'coord':(acessoTotal?'admin':'treinador');
   if(editKey){
     const p=profiles.find(x=>x.key===editKey);
+    // Se é tesoureiro e está a alterar o PIN, pedir confirmação do PIN actual
+    if(p&&p.role==='tesoureiro'&&pin&&pin.length===4){
+      const pinActual=DB.config.pins[editKey]||'';
+      const confirmPinActual=prompt('Introduz o PIN actual do tesoureiro para confirmar a alteração:');
+      if(confirmPinActual!==pinActual){alert('PIN actual incorrecto. Alteração cancelada.');return;}
+    }
     if(p){p.name=nome;p.grupos=grupos;p.role=roleVal;p.licenca=licenca;p.cont=cont;if(pin&&pin.length===4)DB.config.pins[editKey]=pin;}
   } else {
     if(!pin||pin.length!==4||!/^\d{4}$/.test(pin)){alert('PIN deve ter 4 dígitos');return;}
@@ -5344,6 +5406,9 @@ async function loadCaixa(){
     const siCfg=catR.data.find(x=>x.key==='saldos_iniciais');
     if(siCfg)try{DB_CAIXA.saldos_iniciais=JSON.parse(siCfg.value);}catch(e){}
   }
+  // Carregar facturas
+  const factR=await sb.from('facturas').select('*').order('vencimento',{ascending:true});
+  DB_CAIXA.facturas=factR?.data||[];
 }
 
 function _epocas(){
@@ -5592,6 +5657,129 @@ async function saveSaldoInicial(){
   renderCaixa();
 }
 
+
+// ═══ FACTURAS / CONTAS A PAGAR ═══
+function renderFacturas(){
+  const lista=DB_CAIXA.facturas||[];
+  const filEst=document.getElementById('fact-fil-estado')?.value||'';
+  const filData=document.getElementById('fact-fil-data')?.value||'';
+  const filtered=lista.filter(f=>
+    (!filEst||f.estado===filEst)&&
+    (!filData||f.vencimento===filData)
+  ).sort((a,b)=>a.estado==='pendente'&&b.estado!=='pendente'?-1:1);
+  const el=document.getElementById('facturas-lista');
+  if(!el)return;
+  if(!filtered.length){
+    el.innerHTML=`<div style="text-align:center;padding:30px;color:var(--gray-400)"><div style="font-size:32px;margin-bottom:8px">📋</div><div>Sem facturas. Clica em "+ Lançar Factura" para adicionar.</div></div>`;
+    return;
+  }
+  const hoje=new Date().toISOString().split('T')[0];
+  el.innerHTML=`<table class="tbl"><thead><tr>
+    <th>Fornecedor</th><th>Nº Factura</th><th>Categoria</th><th>Vencimento</th><th>Época</th><th style="text-align:right">Valor</th><th>Estado</th><th></th>
+  </tr></thead><tbody>`+filtered.map(f=>{
+    const vencido=f.estado==='pendente'&&f.vencimento<hoje;
+    return `<tr style="${vencido?'background:#FFF5F5':''}">
+      <td><strong>${f.fornecedor||'-'}</strong>${f.notas?`<br><span style="font-size:10px;color:var(--gray-400)">${f.notas}</span>`:''}</td>
+      <td style="font-size:11px;color:var(--gray-500)">${f.numero||'-'}</td>
+      <td>${f.categoria||'-'}</td>
+      <td style="color:${vencido?'#DC2626':'inherit'};font-weight:${vencido?'600':'400'}">${f.vencimento?new Date(f.vencimento+'T00:00:00').toLocaleDateString('pt-PT'):'-'}${vencido?' ⚠️':''}</td>
+      <td style="font-size:11px;color:var(--gray-400)">${f.epoca||'-'}</td>
+      <td style="text-align:right;font-weight:600;color:#DC2626">€${parseFloat(f.valor||0).toFixed(2)}</td>
+      <td>${f.estado==='paga'?'<span class="badge badge-ok">✅ Paga</span>':'<span style="background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:600">🔴 Pendente</span>'}</td>
+      <td><div style="display:flex;gap:4px">
+        ${f.estado==='pendente'?`<button class="btn btn-sm" style="color:#059669;border-color:#6EE7B7;white-space:nowrap" onclick="pagarFactura('${f.id}')">💳 Pagar</button>`:''}
+        <button class="btn btn-sm" onclick="openModalFactura('${f.id}')" style="color:#2563EB;border-color:#BFDBFE">✏️</button>
+        <button class="btn btn-sm" onclick="deleteFactura('${f.id}')" style="color:#DC2626;border-color:#FCA5A5">🗑️</button>
+      </div></td>
+    </tr>`;
+  }).join('')+'</tbody></table>';
+}
+
+function openModalFactura(id){
+  const f=id?(DB_CAIXA.facturas||[]).find(x=>x.id===id):null;
+  document.getElementById('fact-edit-id').value=id||'';
+  document.getElementById('modal-factura-title').textContent=f?'✏️ Editar Factura':'📋 Nova Factura';
+  document.getElementById('fact-fornecedor').value=f?.fornecedor||'';
+  document.getElementById('fact-numero').value=f?.numero||'';
+  document.getElementById('fact-valor').value=f?.valor||'';
+  document.getElementById('fact-vencimento').value=f?.vencimento||'';
+  document.getElementById('fact-categoria').value=f?.categoria||'Material Desportivo';
+  document.getElementById('fact-notas').value=f?.notas||'';
+  const selEp=document.getElementById('fact-epoca');
+  const eps=_epocas();
+  selEp.innerHTML=eps.map(e=>`<option value="${e}" ${e===(f?.epoca||_currentEpoca())?'selected':''}>${e}</option>`).join('');
+  openModal('modal-factura');
+}
+
+async function saveFactura(){
+  const fornecedor=document.getElementById('fact-fornecedor').value.trim();
+  const valor=parseFloat(document.getElementById('fact-valor').value)||0;
+  if(!fornecedor){toast('Introduz o fornecedor');return;}
+  if(!valor){toast('Introduz o valor');return;}
+  const id=document.getElementById('fact-edit-id').value;
+  const rec={
+    id:id||uid(),
+    fornecedor,
+    numero:document.getElementById('fact-numero').value.trim(),
+    valor,
+    vencimento:document.getElementById('fact-vencimento').value,
+    categoria:document.getElementById('fact-categoria').value,
+    notas:document.getElementById('fact-notas').value.trim(),
+    epoca:document.getElementById('fact-epoca').value,
+    estado:id?((DB_CAIXA.facturas||[]).find(x=>x.id===id)?.estado||'pendente'):'pendente',
+  };
+  if(id){
+    await sb.from('facturas').update(rec).eq('id',id);
+    const idx=(DB_CAIXA.facturas||[]).findIndex(x=>x.id===id);
+    if(idx>=0)DB_CAIXA.facturas[idx]=rec;
+  } else {
+    await sb.from('facturas').insert(rec);
+    DB_CAIXA.facturas=DB_CAIXA.facturas||[];
+    DB_CAIXA.facturas.push(rec);
+  }
+  closeModal('modal-factura');
+  toast('✅ Factura guardada!');
+  renderFacturas();
+}
+
+async function pagarFactura(id){
+  const f=(DB_CAIXA.facturas||[]).find(x=>x.id===id);
+  if(!f){toast('Factura não encontrada');return;}
+  if(!confirm(`Confirmas o pagamento de €${parseFloat(f.valor).toFixed(2)} a ${f.fornecedor}?
+
+Será debitado automaticamente dos Depósitos.`))return;
+  // Criar movimento de despesa nos Depósitos
+  const mov={
+    id:uid(),
+    tipo:'despesa',
+    conta:'depositos',
+    data:new Date().toISOString().split('T')[0],
+    valor:f.valor,
+    categoria:f.categoria,
+    descricao:`Pag. Factura ${f.numero?f.numero+' ':''}— ${f.fornecedor}`,
+    epoca:f.epoca||_currentEpoca()
+  };
+  await sb.from('caixa').insert(mov);
+  DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];
+  DB_CAIXA.movimentos.unshift(mov);
+  // Marcar factura como paga
+  const updated={...f,estado:'paga',data_pagamento:new Date().toISOString().split('T')[0]};
+  await sb.from('facturas').update(updated).eq('id',id);
+  const idx=DB_CAIXA.facturas.findIndex(x=>x.id===id);
+  if(idx>=0)DB_CAIXA.facturas[idx]=updated;
+  toast('✅ Factura paga! Débito registado nos Depósitos.');
+  renderFacturas();
+  renderCaixa();
+}
+
+async function deleteFactura(id){
+  if(!confirm('Apagar esta factura?'))return;
+  await sb.from('facturas').delete().eq('id',id);
+  DB_CAIXA.facturas=(DB_CAIXA.facturas||[]).filter(x=>x.id!==id);
+  toast('🗑️ Factura apagada');
+  renderFacturas();
+}
+
 function gerarPDFCaixa(){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
@@ -5629,14 +5817,16 @@ function gerarPDFCaixa(){
   movsEp.slice(0,80).forEach(m=>{
     if(y>270){doc.addPage();y=20;}
     const isRec=m.tipo==='receita';
-    doc.setTextColor(isRec?5:180,isRec?100:0,isRec?0:0);
-    doc.text(m.data?new Date(m.data+'T00:00:00').toLocaleDateString('pt-PT'):'-',mL+1,y);
+    const isTrans=m.categoria==='Transferência Interna';
+    const contaStr=m.conta==='depositos'?'Depósitos':m.conta==='caixa_fisica'?'Caixa':m.conta==='outros'?'Outros':'—';
+    doc.setTextColor(isRec?(isTrans?29:5):(isTrans?29:180),isRec?(isTrans?78:100):0,isRec?(isTrans?216:0):0);
+    doc.text(String(m.data?new Date(m.data+'T00:00:00').toLocaleDateString('pt-PT'):'-'),mL+1,y);
     doc.setTextColor(30,30,30);
-    doc.text(isRec?'Receita':'Despesa',mL+25,y);
-    doc.text(m.conta==='oficial'?'Oficial':'Dia-a-Dia',mL+50,y);
-    doc.text((m.categoria||'-').substring(0,16),mL+75,y);
-    doc.text((m.descricao||'-').substring(0,24),mL+110,y);
-    doc.setTextColor(isRec?5:180,isRec?100:0,isRec?0:0);
+    doc.text(isTrans?'Transf.':isRec?'Receita':'Despesa',mL+25,y);
+    doc.text(contaStr,mL+50,y);
+    doc.text(String(m.categoria||'-').substring(0,16),mL+75,y);
+    doc.text(String(m.descricao||'-').substring(0,24),mL+110,y);
+    doc.setTextColor(isRec?(isTrans?29:5):(isTrans?29:180),isRec?(isTrans?78:100):0,isRec?(isTrans?216:0):0);
     doc.text(`€${parseFloat(m.valor||0).toFixed(2)}`,mL+cW-15,y,{align:'right'});
     doc.setTextColor(30,30,30);
     y+=5;
