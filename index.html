@@ -5781,23 +5781,26 @@ async function deleteFactura(id){
 }
 
 function _hexToRgb(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return[r,g,b];}
-function gerarPDFCaixa(){
+async function gerarPDFCaixa(){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const _corArr=getCorClube?getCorClube():[139,26,26];
-  const [cr,cg,cb]=Array.isArray(_corArr)?_corArr:[139,26,26];
-  const clubeNome=String(DB.config?.clube_nome||document.querySelector('.clube-nome')?.textContent||'GestiOK').trim();
+  const W=210,mL=16,mR=16,cW=W-mL-mR;
+  const RED=getCorClube?getCorClube():[139,26,26];
+  const [cr,cg,cb]=Array.isArray(RED)?RED:[139,26,26];
+  const WHITE=[255,255,255];
+  const clubeNome=String(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'GestiOK').trim();
   const epoca=String(_currentEpoca()||'');
-  const W=210,mL=15,mR=15,cW=W-mL-mR;
+  // Logo circular (igual à ficha clínica)
+  const logoCircular=await makeCircularLogo(LOGO_B64,600).catch(()=>null);
   let y=0;
-  // Cabeçalho
-  doc.setFillColor(cr,cg,cb);doc.rect(0,0,W,28,'F');
-  try{if(window.LOGO_B64){const c=document.createElement('canvas');c.width=80;c.height=80;const ctx=c.getContext('2d');const img=new Image();img.src=window.LOGO_B64;img.onload=()=>{};ctx.drawImage(img,0,0,80,80);doc.addImage(c.toDataURL(),'JPEG',mL,2,24,24);}}catch(e){}
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(14);
-  doc.text(String(clubeNome+' — Relatório de Caixa'),mL+28,12);
-  doc.setFont('helvetica','normal');doc.setFontSize(9);
-  doc.text(String('Época: '+epoca+' | Data: '+new Date().toLocaleDateString('pt-PT')),mL+28,20);
-  y=36;
+  // ── Header (igual à ficha clínica) ──
+  doc.setFillColor(cr,cg,cb);doc.rect(0,0,W,26,'F');
+  try{if(logoCircular)doc.addImage(logoCircular,'PNG',mL,3,20,20);else doc.addImage(LOGO_B64,'JPEG',mL,3,20,20);}catch(e){}
+  doc.setTextColor(...WHITE);doc.setFontSize(15);doc.setFont('helvetica','bold');
+  doc.text(clubeNome+' — Relatório de Caixa',mL+24,11);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text('Época '+epoca+' · Gerado em '+new Date().toLocaleDateString('pt-PT'),mL+24,18);
+  y=34;
   // Resumo
   const movs=DB_CAIXA.movimentos||[];
   const movsEp=movs.filter(m=>!m.epoca||m.epoca===epoca);
