@@ -917,6 +917,28 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<!-- MODAL QUOTA CAIXA -->
+<div id="modal-quota-caixa" class="modal-bg">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header"><span class="modal-title">💰 Registar Pagamento</span><button class="modal-close" onclick="closeModal('modal-quota-caixa')">✕</button></div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Escolhe em que conta deve entrar o pagamento da quota.</div>
+    <div id="quota-caixa-info" style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:10px;font-size:13px;margin-bottom:14px"></div>
+    <input type="hidden" id="quota-caixa-socio-id">
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Conta de Entrada</label>
+      <select class="form-input" id="quota-caixa-conta">
+        <option value="depositos">🏦 Depósitos (cheque/transferência)</option>
+        <option value="caixa_fisica">💵 Caixa (dinheiro em mão)</option>
+        <option value="outros">📂 Outros Fluxos</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="confirmarQuotaCaixa()">✅ Confirmar Pagamento</button>
+      <button class="btn" onclick="closeModal('modal-quota-caixa')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL MOVIMENTO CAIXA -->
 <div id="modal-movimento" class="modal-bg">
   <div class="modal" style="max-width:440px">
@@ -1617,9 +1639,15 @@ function setupForUser(){
   }
   // Treinador t2: sem avaliação
   if(currentUser.key==='t2')document.querySelector('[data-page="avaliacao"]')&&(document.querySelector('[data-page="avaliacao"]').style.display='none');
-  // Set default group
-  const defaultGrupo=GRUPOS[0]||'Sub9+Sub11';
+  // Set default group — usar o grupo do treinador logado
+  let defaultGrupo=GRUPOS[0]||'Sub9+Sub11';
+  if(isTreinador&&currentUser.grupos&&currentUser.grupos.length>0){
+    // Encontrar o grupo que contém os escalões do treinador
+    const grupoDoTreinador=GRUPOS.find(g=>currentUser.grupos.includes(g))||currentUser.grupos[0]||GRUPOS[0];
+    defaultGrupo=grupoDoTreinador;
+  }
   Object.keys(currentGrupo).forEach(k=>currentGrupo[k]=defaultGrupo);
+  currentGrupoTreinos=defaultGrupo;
 }
 function doLoginMesa(){
   // PIN para Mesa de Jogo guardado na config
@@ -4507,8 +4535,15 @@ async function _guardarLinha(id){
   if(idx>=0) DB.socios[idx]={...DB.socios[idx],...rec};
   delete _socRapidoEdits[id];
   showLoading(false);
-  toast('\u2705 Sócio guardado!');
+  toast('✅ Sócio guardado!');
   _renderSociosRapido(!currentUser?.grupos,new Set());
+  // Se quota foi marcada como Paga, oferecer registo no Fluxo de Caixa
+  if(rec.quota==='Paga'){
+    const s=(DB.socios||[]).find(x=>x.id===id);
+    if(s&&parseFloat(s.valor||0)>0){
+      abrirModalQuotaCaixa(id,s.nome,s.valor,s.epoca);
+    }
+  }
 }
 
 async function guardarModoRapido(){
@@ -4534,6 +4569,35 @@ async function guardarModoRapido(){
   showLoading(false);
   toast(`\u2705 ${ok} sócio${ok!==1?'s':''} guardado${ok!==1?'s':''}${err?` \u00b7 ${err} erro${err!==1?'s':''}`:''}`);
   renderSocios();
+}
+
+
+// ═══ QUOTA → CAIXA AUTOMÁTICO ═══
+function abrirModalQuotaCaixa(socioId, nomeSocio, valor, epoca){
+  document.getElementById('quota-caixa-socio-id').value=socioId;
+  document.getElementById('quota-caixa-info').innerHTML=
+    `<strong>${nomeSocio}</strong><br>Valor: <strong>€${parseFloat(valor||0).toFixed(2)}</strong> · Época: ${epoca||_currentEpoca()}`;
+  document.getElementById('quota-caixa-conta').value='depositos';
+  openModal('modal-quota-caixa');
+}
+async function confirmarQuotaCaixa(){
+  const socioId=document.getElementById('quota-caixa-socio-id').value;
+  const conta=document.getElementById('quota-caixa-conta').value;
+  const s=(DB.socios||[]).find(x=>x.id===socioId);
+  if(!s){closeModal('modal-quota-caixa');return;}
+  const mov={
+    id:uid(),tipo:'receita',conta,
+    data:new Date().toISOString().split('T')[0],
+    valor:parseFloat(s.valor||0),
+    categoria:'Quotas',
+    descricao:`Quota — ${s.nome} (Nº${s.num_socio||'-'})`,
+    epoca:_currentEpoca()
+  };
+  await sb.from('caixa').insert(mov);
+  DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];
+  DB_CAIXA.movimentos.unshift(mov);
+  closeModal('modal-quota-caixa');
+  toast('✅ Quota registada no Fluxo de Caixa!');
 }
 
 function _nextNumSocio(){
@@ -4833,7 +4897,7 @@ function editGrupo(i){
     <input type="text" class="form-input" id="edit-grupo-nome-${i}" value="${nomeActual}" style="max-width:160px;font-size:13px">
     <input type="text" class="form-input" id="edit-grupo-subs-${i}" value="${subsActual}" style="max-width:150px;font-size:13px" placeholder="Ex: Sub17,Sub20">
     <button class="btn btn-sm" style="color:#059669;border-color:#6EE7B7" onclick="saveEditGrupo(${i})">✅</button>
-    <button class="btn btn-sm" onclick="renderGruposList()">✕</button>`;
+    <button class="btn btn-sm" onclick="renderAdmin()">✕</button>`;
 }
 async function saveEditGrupo(i){
   const novoNome=document.getElementById('edit-grupo-nome-'+i)?.value.trim();
