@@ -4596,6 +4596,7 @@ async function confirmarQuotaCaixa(){
   await sb.from('caixa').insert(mov);
   DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];
   DB_CAIXA.movimentos.unshift(mov);
+  _sortMovimentos();
   closeModal('modal-quota-caixa');
   toast('✅ Quota registada no Fluxo de Caixa!');
 }
@@ -5487,6 +5488,11 @@ function _epocas(){
 function _currentEpoca(){return DB.config?.epoca||'2025/2026';}
 
 function _contaLabel(c){return c==='depositos'?'🏦 Depósitos':c==='caixa_fisica'?'💵 Caixa':c==='outros'?'📂 Outros Fluxos':c||'-';}
+
+// Ordenar movimentos por data descendente
+function _sortMovimentos(){
+  DB_CAIXA.movimentos=(DB_CAIXA.movimentos||[]).sort((a,b)=>new Date(b.data||0)-new Date(a.data||0));
+}
 function renderCaixa(){
   const movs=DB_CAIXA.movimentos||[];
   const filConta=(document.getElementById('caixa-fil-conta')?.value)||'';
@@ -5597,7 +5603,7 @@ async function saveMovimento(){
   } else {
     rec.id=uid();
     const {error}=await sb.from('caixa').insert(rec);
-    if(!error){DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];DB_CAIXA.movimentos.unshift(rec);}
+    if(!error){DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];DB_CAIXA.movimentos.unshift(rec);_sortMovimentos();}
   }
   closeModal('modal-movimento');toast('✅ Movimento guardado!');renderCaixa();
 }
@@ -5657,7 +5663,7 @@ async function fecharEpoca(){
       transacoes.push({id:uid(),tipo:s>0?'receita':'despesa',conta:c,data:new Date().toISOString().split('T')[0],valor:Math.abs(s),categoria:'Saldo Transitado',descricao:`Saldo transitado da época ${epocaAtual}`,epoca:nova});
     }
   });
-  if(transacoes.length){await sb.from('caixa').insert(transacoes);DB_CAIXA.movimentos=[...transacoes,...(DB_CAIXA.movimentos||[])];}
+  if(transacoes.length){await sb.from('caixa').insert(transacoes);DB_CAIXA.movimentos=[...transacoes,...(DB_CAIXA.movimentos||[])];_sortMovimentos();}
   // Actualizar época corrente
   DB.config.epoca=nova;
   await sb.from('config').upsert({key:'epoca',value:nova});
@@ -5698,6 +5704,7 @@ async function saveTransferencia(){
   await sb.from('caixa').insert([debito,credito]);
   DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];
   DB_CAIXA.movimentos.unshift(credito,debito);
+  _sortMovimentos();
   closeModal('modal-transferencia');
   toast('✅ Transferência efectuada! Depósitos debitados, Caixa creditada.');
   renderCaixa();
@@ -5831,6 +5838,7 @@ Será debitado automaticamente dos Depósitos.`))return;
   await sb.from('caixa').insert(mov);
   DB_CAIXA.movimentos=DB_CAIXA.movimentos||[];
   DB_CAIXA.movimentos.unshift(mov);
+  _sortMovimentos();
   // Marcar factura como paga
   const updated={...f,estado:'paga',data_pagamento:new Date().toISOString().split('T')[0]};
   await sb.from('facturas').update(updated).eq('id',id);
