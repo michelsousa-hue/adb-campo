@@ -4678,6 +4678,11 @@ async function saveSocio(){
   closeModal('modal-socio');
   toast('✅ Sócio guardado!');
   renderSocios();
+  // Se quota foi marcada como Paga, oferecer registo no Fluxo de Caixa
+  if(rec.quota==='Paga'&&parseFloat(rec.valor||0)>0){
+    const socioId=editId||rec.id;
+    abrirModalQuotaCaixa(socioId, rec.nome, rec.valor, _currentEpoca());
+  }
 }
 
 async function reimprimirCartao(id){
