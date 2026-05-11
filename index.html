@@ -691,6 +691,7 @@ textarea.form-input{resize:vertical;min-height:70px}
             <button class="btn btn-primary" onclick="openModalSocio()">+ Novo Sócio</button>
             <label class="btn" style="cursor:pointer;background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE">📥 Importar CSV<input type="file" accept=".csv" style="display:none" onchange="importarCSVSocios(this)"></label>
             <button class="btn" onclick="gerarPDFSocios()">📄 PDF Lista</button>
+            <button class="btn" onclick="gerarAvisosRenovacao()" style="background:#FFF7ED;color:#92400E;border-color:#FCD34D">📬 Avisos Renovação</button>
             <button class="btn" onclick="gerarCartoesSocios()" style="background:#ECFDF5;color:#166534;border-color:#86EFAC">🪪 Cartões</button>
           </div>
         </div>
@@ -5822,15 +5823,15 @@ function renderCaixa(){
     const saldoDep=saldoConta('depositos');
     const saldoCaixa=saldoConta('caixa_fisica');
     const saldoOutros=saldoConta('outros');
-    const saldoOficial=saldoDep+saldoCaixa+saldoOutros;
+    const saldoOficial=saldoDep+saldoCaixa;
     resumo.innerHTML=`
       <div class="metric-card"><div class="metric-label">📈 Total Receitas</div><div class="metric-value metric-ok">€${rec.toFixed(2)}</div></div>
       <div class="metric-card"><div class="metric-label">📉 Total Despesas</div><div class="metric-value ${desp>0?'metric-danger':''}">€${desp.toFixed(2)}</div></div>
-      <div class="metric-card"><div class="metric-label">💰 Saldo Global</div><div class="metric-value ${saldo>=0?'metric-ok':'metric-danger'}">€${saldo.toFixed(2)}</div></div>
+      <div class="metric-card"><div class="metric-label">💰 Saldo Global</div><div class="metric-value ${saldo>=0?'metric-ok':'metric-danger'}">€${(saldo+(Object.values((DB_CAIXA.saldos_iniciais||{})[_currentEpoca()]||{})).reduce((a,v)=>a+v,0)).toFixed(2)}</div></div>
       <div class="metric-card" style="border-top:3px solid #1D4ED8"><div class="metric-label">🏦 Depósitos</div><div class="metric-value ${saldoDep>=0?'metric-ok':'metric-danger'}">€${saldoDep.toFixed(2)}</div></div>
       <div class="metric-card" style="border-top:3px solid #059669"><div class="metric-label">💵 Caixa</div><div class="metric-value ${saldoCaixa>=0?'metric-ok':'metric-danger'}">€${saldoCaixa.toFixed(2)}</div></div>
       <div class="metric-card" style="border-top:3px solid #7C3AED"><div class="metric-label">📂 Outros Fluxos</div><div class="metric-value ${saldoOutros>=0?'metric-ok':'metric-danger'}">€${saldoOutros.toFixed(2)}</div></div>
-      <div class="metric-card" style="border-top:3px solid #DC2626;grid-column:span 2"><div class="metric-label">🏛️ Saldo Total das Contas</div><div class="metric-value ${saldoOficial>=0?'metric-ok':'metric-danger'}">€${saldoOficial.toFixed(2)}</div></div>`;
+      <div class="metric-card" style="border-top:3px solid #DC2626;grid-column:span 2"><div class="metric-label">🏛️ Contas Oficiais (Dep.+Caixa)</div><div class="metric-value ${saldoOficial>=0?'metric-ok':'metric-danger'}">€${saldoOficial.toFixed(2)}</div></div>`;
   }
   const lista=document.getElementById('caixa-lista');
   if(!lista)return;
@@ -6214,6 +6215,149 @@ async function gerarPDFCaixa(){
 }
 
 // ═══ CARTÕES DE SÓCIO CR80 ═══
+async function gerarAvisosRenovacao(){
+  // Usa os filtros activos na página de sócios
+  const lista = _socFiltered();
+  if(!lista.length){toast('Sem sócios com os filtros actuais');return;}
+  try{
+    const {jsPDF}=window.jspdf;
+    const clubeNome=String(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'Clube');
+    const epoca=String(DB.config?.epoca||'2025/2026');
+    const dataGer=new Date().toLocaleDateString('pt-PT');
+    const anoEpoca=epoca.split('/')[1]||new Date().getFullYear();
+    const prazo='30 de Setembro de '+anoEpoca;
+
+    const RED=[139,26,26],WHITE=[255,255,255],BLK=[17,24,39],GRAY=[107,114,128];
+    const GREEN=[6,95,70],ORANGE=[146,64,14],CRIMSON=[153,27,27];
+    const LGRAY=[243,244,246];
+
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210,H=297,margin=20,cW=W-margin*2;
+
+    const logoCircular=await makeCircularLogo(LOGO_B64,600).catch(()=>null);
+
+    const periodoLabel=p=>p==='anual'?'Anual':p==='semestral'?'Semestral':p==='trimestral'?'Trimestral':p==='mensal'?'Mensal':(p||'—');
+    const quotaColor=q=>q==='Paga'?GREEN:q==='Em falta'?CRIMSON:ORANGE;
+    const quotaLabel=q=>q==='Paga'?'✓ PAGA':q==='Em falta'?'⚠ EM FALTA':q==='Parcial'?'◑ PARCIAL':(q||'—');
+    const estadoLabel=e=>e==='Activo'?'Activo':e==='Inactivo'?'Inactivo':(e||'—');
+
+    for(let idx=0;idx<lista.length;idx++){
+      const s=lista[idx];
+      if(idx>0) doc.addPage();
+
+      // ── Cabeçalho vermelho ──
+      doc.setFillColor(...RED);
+      doc.rect(0,0,W,32,'F');
+      try{
+        if(logoCircular) doc.addImage(logoCircular,'PNG',margin,5,22,22);
+        else doc.addImage(LOGO_B64,'JPEG',margin,5,22,22);
+      }catch(e){}
+      doc.setTextColor(...WHITE);
+      doc.setFont('helvetica','bold');doc.setFontSize(16);
+      doc.text(clubeNome,margin+26,14);
+      doc.setFont('helvetica','normal');doc.setFontSize(9);
+      doc.text('Aviso de Renovação de Quotas — Época '+epoca,margin+26,21);
+      doc.text('Emitido em '+dataGer,margin+26,27);
+
+      // ── Destinatário ──
+      let y=46;
+      doc.setTextColor(...BLK);
+      doc.setFont('helvetica','bold');doc.setFontSize(11);
+      doc.text('Exmo(a). Sr(a).',margin,y);
+      doc.setFontSize(15);doc.setFont('helvetica','bold');
+      y+=8;doc.text(String(s.nome||'—'),margin,y);
+      if(s.num_socio){
+        doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+        y+=6;doc.text('Sócio nº '+String(s.num_socio),margin,y);
+      }
+
+      // ── Linha separadora ──
+      y+=8;
+      doc.setDrawColor(...RED);doc.setLineWidth(0.8);
+      doc.line(margin,y,W-margin,y);
+      y+=8;
+
+      // ── Caixa de estado da quota ──
+      const qColor=quotaColor(s.quota);
+      doc.setFillColor(qColor[0],qColor[1],qColor[2]);
+      doc.roundedRect(margin,y,cW,18,3,3,'F');
+      doc.setTextColor(...WHITE);
+      doc.setFont('helvetica','bold');doc.setFontSize(13);
+      doc.text('Estado da quota: '+quotaLabel(s.quota),margin+6,y+8);
+      doc.setFontSize(9);doc.setFont('helvetica','normal');
+      const valorStr=s.valor?'€'+parseFloat(s.valor).toFixed(2)+' ('+periodoLabel(s.periodo)+')':'Valor não definido';
+      doc.text(valorStr,margin+6,y+14);
+      y+=26;
+
+      // ── Tabela de detalhes ──
+      const rows=[
+        ['Tipo de sócio', s.tipo==='atleta'?'Atleta':'Pai / Adepto'],
+        ['Periodicidade', periodoLabel(s.periodo)],
+        ['Valor da quota', s.valor?'€'+parseFloat(s.valor).toFixed(2):'—'],
+        ['Último pagamento', s.ultimo_pag?new Date(s.ultimo_pag).toLocaleDateString('pt-PT'):'—'],
+        ['Estado', estadoLabel(s.estado)],
+      ];
+      doc.setFont('helvetica','normal');doc.setFontSize(10);
+      rows.forEach(([label,val],i)=>{
+        const rowY=y+i*10;
+        doc.setFillColor(i%2===0?243:255,i%2===0?244:255,i%2===0?246:255);
+        doc.rect(margin,rowY-5,cW,10,'F');
+        doc.setTextColor(...GRAY);doc.setFont('helvetica','bold');doc.setFontSize(9);
+        doc.text(label,margin+3,rowY+1);
+        doc.setTextColor(...BLK);doc.setFont('helvetica','normal');
+        doc.text(String(val),margin+60,rowY+1);
+      });
+      y+=rows.length*10+10;
+
+      // ── Mensagem personalizada ──
+      doc.setDrawColor(...LGRAY);doc.setLineWidth(0.3);
+      doc.rect(margin,y,cW,32);
+      doc.setTextColor(...BLK);doc.setFont('helvetica','italic');doc.setFontSize(10);
+      const msg=s.quota==='Paga'
+        ?'Obrigado pela sua renovação! A sua quota está regularizada para a época '+epoca+'. Contamos com o seu apoio continuado.'
+        :s.quota==='Parcial'
+        ?'A sua quota encontra-se parcialmente regularizada. Agradecemos que proceda ao pagamento do valor em falta até '+prazo+'.'
+        :'Solicitamos que proceda à renovação da sua quota para a época '+epoca+' até ao dia '+prazo+'. Para qualquer esclarecimento, contacte a Direcção.';
+      const msgLines=doc.splitTextToSize(msg,cW-10);
+      doc.text(msgLines,margin+5,y+8);
+      y+=40;
+
+      // ── Contacto (se existir) ──
+      if(s.contacto){
+        doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...GRAY);
+        doc.text('Contacto registado: '+String(s.contacto),margin,y);
+        y+=8;
+      }
+
+      // ── Obs (se existir) ──
+      if(s.obs){
+        doc.setFont('helvetica','italic');doc.setFontSize(9);doc.setTextColor(...GRAY);
+        doc.text('Obs: '+String(s.obs),margin,y);
+        y+=8;
+      }
+
+      // ── Assinatura / Direcção ──
+      const yAssin=H-50;
+      doc.setDrawColor(...LGRAY);doc.setLineWidth(0.3);
+      doc.line(margin,yAssin,margin+60,yAssin);
+      doc.setTextColor(...GRAY);doc.setFont('helvetica','normal');doc.setFontSize(8);
+      doc.text('A Direcção',margin,yAssin+5);
+      doc.text(clubeNome,margin,yAssin+10);
+
+      // ── Rodapé ──
+      doc.setFillColor(...RED);doc.rect(0,H-14,W,14,'F');
+      doc.setTextColor(...WHITE);doc.setFontSize(7);doc.setFont('helvetica','normal');
+      doc.text(clubeNome+' — Gestão de Sócios',margin,H-7);
+      doc.text('Época '+epoca+' · Pág. '+(idx+1)+'/'+lista.length,W-margin,H-7,{align:'right'});
+    }
+
+    doc.save('avisos-renovacao-'+epoca.replace('/','_')+'.pdf');
+    toast('📬 '+lista.length+' aviso(s) gerado(s)!');
+  }catch(err){
+    console.error(err);
+    toast('❌ Erro ao gerar avisos: '+err.message);
+  }
+}
 async function gerarCartoesSocios(){
   const _filtrado=_socFiltered().filter(s=>!s.cartao_impresso);
   const _temFiltro=!!(document.getElementById('soc-fil-estado')?.value||document.getElementById('soc-fil-quota')?.value||document.getElementById('soc-fil-data-pag')?.value);
