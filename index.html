@@ -5822,7 +5822,7 @@ function renderCaixa(){
     const saldoDep=saldoConta('depositos');
     const saldoCaixa=saldoConta('caixa_fisica');
     const saldoOutros=saldoConta('outros');
-    const saldoOficial=saldoDep+saldoCaixa;
+    const saldoOficial=saldoDep+saldoCaixa+saldoOutros;
     resumo.innerHTML=`
       <div class="metric-card"><div class="metric-label">📈 Total Receitas</div><div class="metric-value metric-ok">€${rec.toFixed(2)}</div></div>
       <div class="metric-card"><div class="metric-label">📉 Total Despesas</div><div class="metric-value ${desp>0?'metric-danger':''}">€${desp.toFixed(2)}</div></div>
@@ -5830,7 +5830,7 @@ function renderCaixa(){
       <div class="metric-card" style="border-top:3px solid #1D4ED8"><div class="metric-label">🏦 Depósitos</div><div class="metric-value ${saldoDep>=0?'metric-ok':'metric-danger'}">€${saldoDep.toFixed(2)}</div></div>
       <div class="metric-card" style="border-top:3px solid #059669"><div class="metric-label">💵 Caixa</div><div class="metric-value ${saldoCaixa>=0?'metric-ok':'metric-danger'}">€${saldoCaixa.toFixed(2)}</div></div>
       <div class="metric-card" style="border-top:3px solid #7C3AED"><div class="metric-label">📂 Outros Fluxos</div><div class="metric-value ${saldoOutros>=0?'metric-ok':'metric-danger'}">€${saldoOutros.toFixed(2)}</div></div>
-      <div class="metric-card" style="border-top:3px solid #DC2626;grid-column:span 2"><div class="metric-label">🏛️ Contas Oficiais (Dep.+Caixa)</div><div class="metric-value ${saldoOficial>=0?'metric-ok':'metric-danger'}">€${saldoOficial.toFixed(2)}</div></div>`;
+      <div class="metric-card" style="border-top:3px solid #DC2626;grid-column:span 2"><div class="metric-label">🏛️ Saldo Total das Contas</div><div class="metric-value ${saldoOficial>=0?'metric-ok':'metric-danger'}">€${saldoOficial.toFixed(2)}</div></div>`;
   }
   const lista=document.getElementById('caixa-lista');
   if(!lista)return;
