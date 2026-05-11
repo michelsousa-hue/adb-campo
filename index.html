@@ -5826,7 +5826,7 @@ function renderCaixa(){
     resumo.innerHTML=`
       <div class="metric-card"><div class="metric-label">📈 Total Receitas</div><div class="metric-value metric-ok">€${rec.toFixed(2)}</div></div>
       <div class="metric-card"><div class="metric-label">📉 Total Despesas</div><div class="metric-value ${desp>0?'metric-danger':''}">€${desp.toFixed(2)}</div></div>
-      <div class="metric-card"><div class="metric-label">💰 Saldo Global</div><div class="metric-value ${saldo>=0?'metric-ok':'metric-danger'}">€${(saldo+(Object.values((DB_CAIXA.saldos_iniciais||{})[_currentEpoca()]||{})).reduce((a,v)=>a+v,0)).toFixed(2)}</div></div>
+      <div class="metric-card"><div class="metric-label">💰 Saldo Global</div><div class="metric-value ${saldo>=0?'metric-ok':'metric-danger'}">€${saldo.toFixed(2)}</div></div>
       <div class="metric-card" style="border-top:3px solid #1D4ED8"><div class="metric-label">🏦 Depósitos</div><div class="metric-value ${saldoDep>=0?'metric-ok':'metric-danger'}">€${saldoDep.toFixed(2)}</div></div>
       <div class="metric-card" style="border-top:3px solid #059669"><div class="metric-label">💵 Caixa</div><div class="metric-value ${saldoCaixa>=0?'metric-ok':'metric-danger'}">€${saldoCaixa.toFixed(2)}</div></div>
       <div class="metric-card" style="border-top:3px solid #7C3AED"><div class="metric-label">📂 Outros Fluxos</div><div class="metric-value ${saldoOutros>=0?'metric-ok':'metric-danger'}">€${saldoOutros.toFixed(2)}</div></div>
