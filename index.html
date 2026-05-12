@@ -324,6 +324,7 @@ textarea.form-input{resize:vertical;min-height:70px}
     <nav class="sidebar" id="sidebar">
       <div class="nav-section admin-only" style="display:none">Administração</div>
       <div class="nav-item admin-only" data-page="admin" style="display:none"><span class="nav-icon">⚙️</span>Administração</div>
+      <div class="nav-item admin-only" id="nav-inscricoes" data-page="inscricoes" style="display:none"><span class="nav-icon">📋</span>Inscrições <span id="badge-inscricoes" style="display:none;background:#DC2626;color:white;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px">0</span></div>
       <div class="nav-item admin-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
       <div class="nav-section tesour-only" style="display:none">Tesouraria</div>
       <div class="nav-item tesour-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
@@ -641,6 +642,26 @@ textarea.form-input{resize:vertical;min-height:70px}
           </div>
           <div style="font-size:11px;color:var(--gray-400);margin-top:6px">Os grupos definem quais escalões pertencem a cada treinador.</div>
         </div>
+      </div>
+
+      <!-- ── INSCRIÇÕES ── -->
+      <div id="page-inscricoes" class="page">
+        <div class="page-header">
+          <div><div class="page-title">Inscrições Online</div><div class="page-sub">Pedidos de inscrição recebidos pelo formulário público</div></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="copiarLinkFormulario()" style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE">🔗 Link do Formulário</button>
+          </div>
+        </div>
+        <div id="inscricoes-filtros" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <select class="form-input" id="inscr-fil-estado" onchange="renderInscricoes()" style="max-width:160px">
+            <option value="">Todos os estados</option>
+            <option value="Pendente">Pendente</option>
+            <option value="Aprovada">Aprovada</option>
+            <option value="Rejeitada">Rejeitada</option>
+          </select>
+          <input type="text" class="form-input" id="inscr-search" onkeyup="renderInscricoes()" placeholder="🔍 Pesquisar nome..." style="max-width:220px">
+        </div>
+        <div id="inscricoes-list"></div>
       </div>
 
       <!-- ── SÓCIOS ── -->
@@ -1353,7 +1374,7 @@ const COMPS = [
 ];
 
 // ═══ STATE ═══
-let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], fichas_avaliacao:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'}, delegados:[], treinos:[] };
+let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], fichas_avaliacao:[], inscricoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'}, delegados:[], treinos:[] };
 // Ficha legado (19 gestos originais — nunca apagar para preservar registos existentes)
 const FICHA_LEGACY_ID = 'iniciacao_legacy';
 const FICHA_LEGACY = {
@@ -1426,7 +1447,7 @@ async function loadAllData(){
   _loadingData = true;
   showLoading(true);
   try {
-    const [jogsR, sessR, avalR, cfgR, jogosR, delegR, treinosR, metR, clinR, socR, fichasR] = await Promise.all([
+    const [jogsR, sessR, avalR, cfgR, jogosR, delegR, treinosR, metR, clinR, socR, fichasR, inscrR] = await Promise.all([
       sb.from('jogadores').select('*').order('nome'),
       sb.from('sessoes').select('*').order('data',{ascending:false}),
       sb.from('avaliacoes').select('*'),
@@ -1438,6 +1459,7 @@ async function loadAllData(){
       sb.from('clinico').select('*'),
       sb.from('socios').select('*').order('nome'),
       sb.from('fichas_avaliacao').select('*').order('ordem',{ascending:true}),
+      sb.from('inscricoes').select('*').order('criado_em',{ascending:false}),
     ]);
     // Deduplicate jogadores by id (fix for repeated players bug)
     const rawJogs = jogsR.data || [];
@@ -1454,6 +1476,7 @@ async function loadAllData(){
     DB.fichas_avaliacao = [FICHA_LEGACY, ...fichasDB.filter(f=>f.id!==FICHA_LEGACY_ID)];
     // Ficha activa = primeira activa por ordem (default: legado)
     fichaAtiva = DB.fichas_avaliacao.find(f=>f.ativo) || FICHA_LEGACY;
+    DB.inscricoes = inscrR.data || [];
     // Load all presencas with pagination
     DB.presencas = {};
     let presPage = 0;
@@ -1666,6 +1689,8 @@ function setupForUser(){
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=isAdmin?'':'none');
   document.querySelectorAll('.tesour-only').forEach(el=>el.style.display=(isTesour||isAdmin)?'':'none');
   document.querySelectorAll('.coord-only').forEach(el=>el.style.display=(isCoordTec||isAdmin)?'':'none');
+  // Badge de inscrições pendentes
+  if(isAdmin) atualizarBadgeInscricoes();
 
   // Admin vê tudo — mostrar também secções normais (já visíveis por defeito)
   // Tesoureiro — esconder secções desportivas
@@ -1757,7 +1782,7 @@ document.getElementById('sidebar').addEventListener('click',e=>{
   const el=e.target.closest('.nav-item[data-page]'); if(el)navGo(el);
 });
 function renderPage(p){
-  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();}};
+  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();},inscricoes:renderInscricoes};
   if(map[p])map[p]();
 }
 function buildGrupoTabs(cid,pageKey){
@@ -3669,6 +3694,181 @@ async function apagarJogo(id){
 }
 
 // ═══ ADMIN ═══
+// ═══ INSCRIÇÕES ONLINE ═══
+function atualizarBadgeInscricoes(){
+  const pendentes = (DB.inscricoes||[]).filter(i=>i.estado==='Pendente').length;
+  const badge = document.getElementById('badge-inscricoes');
+  if(badge){
+    badge.textContent = pendentes;
+    badge.style.display = pendentes > 0 ? '' : 'none';
+  }
+}
+function copiarLinkFormulario(){
+  const url = window.location.href.replace(/\/[^\/]*$/, '/') + 'inscricao.html';
+  navigator.clipboard.writeText(url).then(()=>toast('🔗 Link copiado!')).catch(()=>toast('🔗 Abre o ficheiro inscricao.html no mesmo servidor'));
+}
+function renderInscricoes(){
+  atualizarBadgeInscricoes();
+  const filEstado = document.getElementById('inscr-fil-estado')?.value||'';
+  const search = (document.getElementById('inscr-search')?.value||'').toLowerCase();
+  let lista = DB.inscricoes||[];
+  if(filEstado) lista = lista.filter(i=>i.estado===filEstado);
+  if(search) lista = lista.filter(i=>(i.nome||'').toLowerCase().includes(search));
+  const div = document.getElementById('inscricoes-list');
+  if(!div)return;
+  const total = (DB.inscricoes||[]).length;
+  const pendentes = (DB.inscricoes||[]).filter(i=>i.estado==='Pendente').length;
+  const aprovadas = (DB.inscricoes||[]).filter(i=>i.estado==='Aprovada').length;
+  div.innerHTML=`
+    <div class="metrics-grid" style="margin-bottom:16px">
+      <div class="metric-card"><div class="metric-label">Total recebidas</div><div class="metric-value">${total}</div></div>
+      <div class="metric-card" style="border-top:3px solid #DC2626"><div class="metric-label">⏳ Pendentes</div><div class="metric-value metric-danger">${pendentes}</div></div>
+      <div class="metric-card" style="border-top:3px solid #059669"><div class="metric-label">✅ Aprovadas</div><div class="metric-value metric-ok">${aprovadas}</div></div>
+    </div>
+    ${lista.length===0?'<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Sem inscrições encontradas</div></div>':''}
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${lista.map(i=>{
+        const estadoCor = i.estado==='Pendente'?'#FEF3C7':i.estado==='Aprovada'?'#F0FDF4':'#FEF2F2';
+        const estadoBorder = i.estado==='Pendente'?'#FCD34D':i.estado==='Aprovada'?'#86EFAC':'#FECACA';
+        const estadoIcon = i.estado==='Pendente'?'⏳':i.estado==='Aprovada'?'✅':'❌';
+        const dataCriado = i.criado_em ? new Date(i.criado_em).toLocaleDateString('pt-PT') : '—';
+        return`<div style="background:${i.estado==='Pendente'?'#FFF':'#F9FAFB'};border:1px solid ${estadoBorder};border-left:4px solid ${estadoBorder};border-radius:10px;padding:14px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-weight:700;font-size:15px;margin-bottom:2px">${i.nome||'—'}</div>
+              <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">${estadoIcon} ${i.estado} · Recebido em ${dataCriado}</div>
+              <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--gray-600)">
+                ${i.data_nasc?`<span>📅 ${new Date(i.data_nasc).toLocaleDateString('pt-PT')}</span>`:''}
+                ${i.local_nasc?`<span>📍 ${i.local_nasc}</span>`:''}
+                ${i.nacionalidade?`<span>🌍 ${i.nacionalidade}</span>`:''}
+                ${i.cc_num?`<span>🪪 CC ${i.cc_num}</span>`:''}
+                ${i.telefone?`<span>📞 ${i.telefone}</span>`:''}
+                ${i.email?`<span>✉️ ${i.email}</span>`:''}
+                ${i.escalao?`<span>🏒 ${i.escalao}</span>`:''}
+                ${i.morada?`<span>🏠 ${i.morada}${i.cod_postal?' · '+i.cod_postal:''}</span>`:''}
+              </div>
+              ${i.obs?`<div style="font-size:11px;color:var(--gray-500);margin-top:6px;font-style:italic">Obs: ${i.obs}</div>`:''}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${i.estado==='Pendente'?`
+                <button onclick="aprovarInscricao('${i.id}')" class="btn" style="background:#D1FAE5;color:#065F46;border-color:#6EE7B7;font-size:12px">✅ Aprovar</button>
+                <button onclick="rejeitarInscricao('${i.id}')" class="btn" style="background:#FEF2F2;color:#991B1B;border-color:#FECACA;font-size:12px">❌ Rejeitar</button>
+              `:''}
+              ${i.estado==='Aprovada'?`<button onclick="gerarFichaFiliacao('${i.id}')" class="btn" style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE;font-size:12px">📄 Gerar Ficha</button>`:''}
+              <button onclick="apagarInscricao('${i.id}')" class="btn" style="font-size:12px;background:#FEF2F2;color:#991B1B;border-color:#FECACA">🗑️</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+async function aprovarInscricao(id){
+  const inscr = DB.inscricoes.find(i=>i.id===id);
+  if(!inscr||!confirm(`Aprovar inscrição de ${inscr.nome}?`))return;
+  showLoading(true);
+  await sb.from('inscricoes').update({estado:'Aprovada',aprovado_em:new Date().toISOString(),aprovado_por:currentUser?.name||'Admin'}).eq('id',id);
+  inscr.estado='Aprovada';
+  inscr.aprovado_em=new Date().toISOString();
+  showLoading(false);
+  toast('✅ Inscrição aprovada! Podes agora gerar a ficha de filiação.');
+  renderInscricoes();
+}
+async function rejeitarInscricao(id){
+  const inscr = DB.inscricoes.find(i=>i.id===id);
+  if(!inscr||!confirm(`Rejeitar inscrição de ${inscr.nome}?`))return;
+  showLoading(true);
+  await sb.from('inscricoes').update({estado:'Rejeitada'}).eq('id',id);
+  inscr.estado='Rejeitada';
+  showLoading(false);
+  toast('❌ Inscrição rejeitada');
+  renderInscricoes();
+}
+async function apagarInscricao(id){
+  const inscr = DB.inscricoes.find(i=>i.id===id);
+  if(!inscr||!confirm(`Apagar inscrição de ${inscr.nome}?`))return;
+  showLoading(true);
+  await sb.from('inscricoes').delete().eq('id',id);
+  DB.inscricoes = DB.inscricoes.filter(i=>i.id!==id);
+  showLoading(false);
+  toast('🗑️ Inscrição apagada');
+  renderInscricoes();
+}
+async function gerarFichaFiliacao(id){
+  const i = DB.inscricoes.find(x=>x.id===id);
+  if(!i)return;
+  try{
+    const {jsPDF}=window.jspdf;
+    const clubeNome=String(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'Clube');
+    const epoca=String(DB.config?.epoca||'2025/2026');
+    const dataGer=new Date().toLocaleDateString('pt-PT');
+    const RED=[139,26,26],WHITE=[255,255,255],BLK=[17,24,39],GRAY=[107,114,128],LGRAY=[230,232,235];
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210,H=297,margin=18,cW=W-margin*2;
+    const logoCircular=await makeCircularLogo(LOGO_B64,600).catch(()=>null);
+    // Cabeçalho
+    doc.setFillColor(...RED);doc.rect(0,0,W,30,'F');
+    try{if(logoCircular)doc.addImage(logoCircular,'PNG',margin,4,22,22);else doc.addImage(LOGO_B64,'JPEG',margin,4,22,22);}catch(e){}
+    doc.setTextColor(...WHITE);doc.setFont('helvetica','bold');doc.setFontSize(14);
+    doc.text(clubeNome,margin+26,13);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);
+    doc.text('Ficha de Filiação de Associado',margin+26,20);
+    doc.text('Emitido em '+dataGer,margin+26,26);
+    // Título
+    let y=40;
+    doc.setTextColor(...BLK);doc.setFont('helvetica','bold');doc.setFontSize(13);
+    doc.text('FICHA DE FILIAÇÃO DE ASSOCIADO',W/2,y,{align:'center'});
+    y+=4;doc.setDrawColor(...RED);doc.setLineWidth(0.6);doc.line(margin,y,W-margin,y);y+=10;
+    // Nº sócio
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...BLK);
+    doc.text('Nº ______',W-margin-25,y);y+=8;
+    // Campos
+    const fields=[
+      ['Nome',i.nome||''],
+      ['Morada',i.morada||''],
+      ['Código Postal',i.cod_postal||''],
+      ['Nascido a',i.data_nasc?new Date(i.data_nasc).toLocaleDateString('pt-PT'):''],
+      ['Natural de',i.local_nasc||''],
+      ['C.C. nº',i.cc_num||''],
+      ['Válido até',i.cc_validade?new Date(i.cc_validade).toLocaleDateString('pt-PT'):''],
+      ['Nacionalidade',i.nacionalidade||''],
+      ['Telefone',i.telefone||''],
+    ];
+    fields.forEach(([label,val])=>{
+      doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...GRAY);
+      doc.text(label,margin,y);
+      doc.setFont('helvetica','normal');doc.setTextColor(...BLK);
+      doc.text(val,margin+40,y);
+      doc.setDrawColor(...LGRAY);doc.setLineWidth(0.2);doc.line(margin+40,y+1,W-margin,y+1);
+      y+=9;
+    });
+    y+=6;
+    // Escalão (se atleta)
+    if(i.escalao){
+      doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...GRAY);
+      doc.text('Escalão',margin,y);
+      doc.setFont('helvetica','normal');doc.setTextColor(...BLK);
+      doc.text(i.escalao,margin+40,y);
+      y+=9;
+    }
+    y+=8;
+    // Assinatura
+    doc.setDrawColor(...LGRAY);doc.setLineWidth(0.3);doc.line(margin,y,margin+70,y);
+    doc.setTextColor(...GRAY);doc.setFont('helvetica','normal');doc.setFontSize(8);
+    doc.text('Assinatura do Associado / Encarregado de Educação',margin,y+5);
+    // Carimbo
+    doc.rect(W-margin-55,y-18,55,26);
+    doc.text('Validação do Clube',W-margin-52,y-12);
+    doc.text('Data: _____ / _____ / _____',W-margin-52,y-6);
+    // Rodapé
+    doc.setFillColor(...RED);doc.rect(0,H-14,W,14,'F');
+    doc.setTextColor(...WHITE);doc.setFontSize(7);
+    doc.text(clubeNome+' — Ficha de Filiação',margin,H-7);
+    doc.text('Época '+epoca,W-margin,H-7,{align:'right'});
+    doc.save('ficha-filiacao-'+((i.nome||'socio').replace(/\s+/g,'-').toLowerCase())+'.pdf');
+    toast('📄 Ficha de filiação gerada!');
+  }catch(err){console.error(err);toast('❌ Erro: '+err.message);}
+}
+// ═══ FIM INSCRIÇÕES ═══
 function renderAdmin(){
   document.getElementById('epoca-label').textContent=DB.config.epoca;
   document.getElementById('pins-tbody').innerHTML=profiles.map(p=>`<tr><td>${p.name}</td><td><span style="font-family:var(--mono)">••••</span></td><td style="display:flex;gap:6px"><button class="btn btn-sm" onclick="openChangePIN('${p.key}','${p.name}')">Alterar PIN</button>${p.key!=='coord'&&p.key!=='mesa'?`<button class="btn btn-sm" style="color:#DC2626;border-color:#FCA5A5" onclick="deletePerfil('${p.key}')">🗑️</button>`:''}</td></tr>`).join('');
