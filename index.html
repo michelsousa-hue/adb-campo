@@ -324,7 +324,7 @@ textarea.form-input{resize:vertical;min-height:70px}
     <nav class="sidebar" id="sidebar">
       <div class="nav-section admin-only" style="display:none">Administração</div>
       <div class="nav-item admin-only" data-page="admin" style="display:none"><span class="nav-icon">⚙️</span>Administração</div>
-      <div class="nav-item admin-only" id="nav-inscricoes" data-page="inscricoes" style="display:none"><span class="nav-icon">📋</span>Inscrições <span id="badge-inscricoes" style="display:none;background:#DC2626;color:white;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px">0</span></div>
+      <div class="nav-item admin-only tesour-only" id="nav-inscricoes" data-page="inscricoes" style="display:none"><span class="nav-icon">📋</span>Inscrições <span id="badge-inscricoes" style="display:none;background:#DC2626;color:white;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px">0</span></div>
       <div class="nav-item admin-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
       <div class="nav-section tesour-only" style="display:none">Tesouraria</div>
       <div class="nav-item tesour-only" data-page="comunicados" style="display:none"><span class="nav-icon">📢</span>Comunicados</div>
@@ -1690,7 +1690,7 @@ function setupForUser(){
   document.querySelectorAll('.tesour-only').forEach(el=>el.style.display=(isTesour||isAdmin)?'':'none');
   document.querySelectorAll('.coord-only').forEach(el=>el.style.display=(isCoordTec||isAdmin)?'':'none');
   // Badge de inscrições pendentes
-  if(isAdmin) atualizarBadgeInscricoes();
+  if(isAdmin||isTesour) atualizarBadgeInscricoes();
 
   // Admin vê tudo — mostrar também secções normais (já visíveis por defeito)
   // Tesoureiro — esconder secções desportivas
