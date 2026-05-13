@@ -3764,14 +3764,43 @@ function renderInscricoes(){
 }
 async function aprovarInscricao(id){
   const inscr = DB.inscricoes.find(i=>i.id===id);
-  if(!inscr||!confirm(`Aprovar inscrição de ${inscr.nome}?`))return;
+  if(!inscr||!confirm(`Aprovar inscrição de ${inscr.nome}?\n\nSerá gerado automaticamente:\n• Nº de sócio\n• Cartão CR80\n• Aviso de pagamento de quota`))return;
   showLoading(true);
-  await sb.from('inscricoes').update({estado:'Aprovada',aprovado_em:new Date().toISOString(),aprovado_por:currentUser?.name||'Admin'}).eq('id',id);
+  // 1. Criar sócio (só colunas existentes na tabela)
+  const numSocio = _nextNumSocio();
+  const novoSocio = {
+    id: uid(),
+    nome: inscr.nome,
+    num_socio: String(numSocio),
+    tipo: inscr.escalao ? 'atleta' : 'externo',
+    estado: 'Activo',
+    quota: 'Em falta',
+    periodo: 'anual',
+    valor: null,
+    ultimo_pag: null,
+    contacto: inscr.telefone||null,
+    obs: `Inscrito via formulário online. CC: ${inscr.cc_num||'—'}`,
+    inscricao_id: id,
+    cartao_impresso: false,
+  };
+  const insRes = await sb.from('socios').insert(novoSocio);
+  if(insRes.error){showLoading(false);toast('❌ Erro ao criar sócio: '+insRes.error.message);return;}
+  DB.socios.push(novoSocio);
+  // 2. Marcar inscrição como aprovada
+  await sb.from('inscricoes').update({
+    estado:'Aprovada',
+    aprovado_em: new Date().toISOString(),
+    aprovado_por: currentUser?.name||'Admin'
+  }).eq('id',id);
   inscr.estado='Aprovada';
   inscr.aprovado_em=new Date().toISOString();
   showLoading(false);
-  toast('✅ Inscrição aprovada! Podes agora gerar a ficha de filiação.');
+  toast(`✅ ${inscr.nome} aprovado! Sócio nº ${numSocio} criado. A gerar documentos…`);
   renderInscricoes();
+  // 3. Gerar cartão CR80
+  await gerarCartaoSocioUnico(novoSocio);
+  // 4. Gerar aviso de pagamento de quota (reutiliza gerarAvisosRenovacao com este sócio)
+  await gerarAvisoQuotaUnico(novoSocio);
 }
 async function rejeitarInscricao(id){
   const inscr = DB.inscricoes.find(i=>i.id===id);
@@ -3792,6 +3821,22 @@ async function apagarInscricao(id){
   showLoading(false);
   toast('🗑️ Inscrição apagada');
   renderInscricoes();
+}
+function verFichaInscricao(inscricaoId){
+  const i = DB.inscricoes.find(x=>x.id===inscricaoId);
+  if(!i){toast('Ficha de inscrição não encontrada');return;}
+  navigate('inscricoes');
+  setTimeout(()=>{
+    const filEl=document.getElementById('inscr-fil-estado');
+    const searchEl=document.getElementById('inscr-search');
+    if(filEl) filEl.value='';
+    if(searchEl) searchEl.value=i.nome;
+    renderInscricoes();
+    setTimeout(()=>{
+      const cards=document.querySelectorAll('#inscricoes-list > div > div');
+      if(cards.length) cards[0].scrollIntoView({behavior:'smooth',block:'center'});
+    },300);
+  },200);
 }
 async function gerarFichaFiliacao(id){
   const i = DB.inscricoes.find(x=>x.id===id);
@@ -4890,11 +4935,13 @@ function _renderSociosGestao(isCoord){
     const estCls=s.estado==='Activo'?'soc-badge-ativo':s.estado==='Inactivo'?'soc-badge-inativo':'soc-badge-pendente';
     const qCls=s.quota==='Paga'?'quota-paga':s.quota==='Em falta'?'quota-falta':'quota-parcial';
     const atleta=s.tipo==='atleta'&&s.atleta_id?DB.jogadores.find(x=>x.id===s.atleta_id):null;
+    const inscricaoBtn=s.inscricao_id?`<button class="btn btn-sm" title="Ver ficha de inscrição" onclick="verFichaInscricao('${s.inscricao_id}')" style="color:#059669;border-color:#6EE7B7">📋</button>`:'';
     const editBtns=isCoord?`<div style="display:flex;gap:4px">
       <button class="btn btn-sm" onclick="openModalSocio('${s.id}')" style="color:#2563EB;border-color:#BFDBFE">\u270f\ufe0f</button>
       <button class="btn btn-sm" onclick="deleteSocio('${s.id}')" style="color:#DC2626;border-color:#FCA5A5">\ud83d\uddd1\ufe0f</button>
       ${s.cartao_impresso?`<button class="btn btn-sm" title="Reimprimir cartão" onclick="reimprimirCartao('${s.id}')" style="color:#7C3AED;border-color:#C4B5FD">🔄</button>`:''}
-    </div>`:'';
+      ${inscricaoBtn}
+    </div>`:(inscricaoBtn?`<div style="display:flex;gap:4px">${inscricaoBtn}</div>`:'');
     return`<div class="soc-card">
       <div class="soc-card-header">
         <div>
@@ -6521,6 +6568,142 @@ async function gerarAvisosRenovacao(){
     doc.save('renovacao-quotas-'+epoca.replace('/','_')+'.pdf');
     toast('📬 '+lista.length+' ficha(s) de renovação gerada(s)!');
   }catch(err){console.error(err);toast('❌ Erro: '+err.message);}
+}
+
+// Gera cartão CR80 para um único sócio (chamado ao aprovar inscrição)
+async function gerarCartaoSocioUnico(s){
+  try{
+    const {jsPDF}=window.jspdf;
+    const clubeNome=(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'GestiOK').trim();
+    const epoca=DB.config?.epoca||'2025/2026';
+    const hexCor=DB.config?.clube_cor||'#8B1A1A';
+    function hexRgb(hex){const h=hex.replace('#','');return[parseInt(h.substring(0,2),16),parseInt(h.substring(2,4),16),parseInt(h.substring(4,6),16)];}
+    const [cr,cg,cb]=hexRgb(hexCor.startsWith('#')?hexCor:'#8B1A1A');
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const cW=85.6,cH=54;
+    const x=(210-cW)/2,y=(297-cH)/2;
+    let logoCirc=null;
+    try{const rawLogo=DB.config?.clube_logo||(typeof LOGO_B64!=='undefined'?LOGO_B64:null);if(rawLogo)logoCirc=await makeCircularLogo(rawLogo,300).catch(()=>null);}catch(e){}
+    // Fundo
+    doc.setFillColor(cr,cg,cb);doc.roundedRect(x,y,cW,cH,3,3,'F');
+    doc.setFillColor(255,255,255);doc.roundedRect(x+0.5,y+0.5,cW-1,cH-1,2.5,2.5,'F');
+    // Header
+    doc.setFillColor(cr,cg,cb);doc.rect(x,y,cW,14,'F');
+    doc.setFillColor(cr,cg,cb);doc.rect(x,y+10,cW,4,'F');
+    if(logoCirc){try{doc.addImage(logoCirc,'PNG',x+2,y+1,12,12);}catch(e){}}
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(7);
+    doc.text(clubeNome,x+16,y+7);
+    doc.setFont('helvetica','normal');doc.setFontSize(5.5);
+    doc.text('Cartão de Sócio — '+epoca,x+16,y+11.5);
+    // Nome
+    doc.setTextColor(cr,cg,cb);doc.setFont('helvetica','bold');doc.setFontSize(9);
+    doc.text(doc.splitTextToSize(s.nome,cW-20),x+3,y+22);
+    // Nº sócio
+    if(s.num_socio){doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(100,100,100);doc.text('Nº '+s.num_socio,x+3,y+37);}
+    // Badge quota pendente
+    doc.setFillColor(220,38,38);doc.rect(x+3,y+40,30,6,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(5.5);
+    doc.text('QUOTA PENDENTE',x+5,y+44);
+    // Tipo
+    doc.setTextColor(150,150,150);doc.setFont('helvetica','normal');doc.setFontSize(6);
+    doc.text(s.tipo==='atleta'?'Atleta':'Pai / Adepto',x+3,y+50);
+    doc.setTextColor(200,200,200);doc.setFontSize(4.5);
+    doc.text('GestiOK • '+clubeNome,x+cW-2,y+cH-2,{align:'right'});
+    doc.save('cartao-socio-'+(s.nome||'socio').replace(/\s+/g,'-').toLowerCase()+'.pdf');
+    toast('🪪 Cartão gerado para '+s.nome+'!');
+  }catch(err){console.error(err);toast('❌ Erro ao gerar cartão: '+err.message);}
+}
+
+// Gera aviso de quota para um único sócio (chamado ao aprovar inscrição)
+async function gerarAvisoQuotaUnico(s){
+  try{
+    const {jsPDF}=window.jspdf;
+    const clubeNome=String(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'Clube');
+    const epoca=String(DB.config?.epoca||'2025/2026');
+    const anoI=epoca.split('/')[0]||'';
+    const anoF=epoca.split('/')[1]||'';
+    const dataGer=new Date().toLocaleDateString('pt-PT');
+    const RED=[139,26,26],WHITE=[255,255,255],BLK=[17,24,39],GRAY=[107,114,128],LGRAY=[230,232,235];
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210,H=297,margin=18,cW=W-margin*2;
+    const logoCircular=await makeCircularLogo(LOGO_B64,600).catch(()=>null);
+    // Cabeçalho
+    doc.setFillColor(...RED);doc.rect(0,0,W,30,'F');
+    try{if(logoCircular)doc.addImage(logoCircular,'PNG',margin,4,22,22);else doc.addImage(LOGO_B64,'JPEG',margin,4,22,22);}catch(e){}
+    doc.setTextColor(...WHITE);doc.setFont('helvetica','bold');doc.setFontSize(15);
+    doc.text(clubeNome,margin+26,13);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);
+    doc.text('Ficha de Renovação de Quotas — Época '+epoca,margin+26,20);
+    doc.text('Emitido em '+dataGer,margin+26,26);
+    // Título
+    let y=40;
+    doc.setTextColor(...BLK);doc.setFont('helvetica','bold');doc.setFontSize(13);
+    doc.text('PAGAMENTO DE QUOTAS — NOVO SÓCIO',W/2,y,{align:'center'});
+    y+=4;doc.setDrawColor(...RED);doc.setLineWidth(0.6);doc.line(margin,y,W-margin,y);y+=10;
+    // Dados do sócio
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...BLK);
+    doc.text('O Atleta / Pai / Sócio',margin,y);
+    const labelW=doc.getTextWidth('O Atleta / Pai / Sócio ')+1;
+    doc.setFont('helvetica','bold');doc.text(String(s.nome||''),margin+labelW,y);
+    doc.setFont('helvetica','normal');
+    doc.setDrawColor(...LGRAY);doc.setLineWidth(0.3);doc.line(margin+labelW,y+1,W-margin,y+1);
+    y+=8;
+    doc.text('Nº Sócio',margin,y);
+    const nsW=doc.getTextWidth('Nº Sócio ')+1;
+    doc.setFont('helvetica','bold');doc.text(String(s.num_socio||''),margin+nsW,y);
+    doc.setFont('helvetica','normal');doc.line(margin+nsW,y+1,W/2,y+1);
+    y+=8;
+    doc.text('pretende regularizar a sua situação de sócio relativamente à época',margin,y);
+    y+=6;
+    doc.setFont('helvetica','bold');doc.text(anoI+' / '+anoF,margin,y);
+    doc.setFont('helvetica','normal');doc.text('com o pagamento da modalidade:',margin+22,y);
+    y+=12;
+    // Tabela modalidades
+    const colMid=W/2-4;const lineH=10;
+    doc.setFillColor(245,245,245);doc.rect(margin,y-5,colMid-margin,7,'F');
+    doc.setFillColor(245,245,245);doc.rect(colMid+4,y-5,W-margin-colMid-4,7,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...RED);
+    doc.text('MODALIDADE',margin+2,y);doc.text('FORMA DE PAGAMENTO',colMid+6,y);
+    y+=4;
+    doc.setDrawColor(...RED);doc.setLineWidth(0.4);
+    doc.line(margin,y,colMid,y);doc.line(colMid+4,y,W-margin,y);y+=6;
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...BLK);
+    const mods=[{label:'1 mês',valor:'2,00 €'},{label:'6 meses',valor:'12,00 €'},{label:'12 meses',valor:'24,00 €'}];
+    const periodoMap={'mensal':0,'semestral':1,'anual':2};
+    const selIdx=periodoMap[s.periodo]??-1;
+    mods.forEach((m,i)=>{
+      const rowY=y+i*lineH;
+      doc.setDrawColor(...GRAY);doc.setLineWidth(0.3);doc.rect(margin,rowY-3.5,4,4);
+      if(i===selIdx){doc.setFont('helvetica','bold');doc.setTextColor(...RED);doc.text('X',margin+0.7,rowY);doc.setFont('helvetica','normal');doc.setTextColor(...BLK);}
+      doc.text(m.label+' — '+m.valor,margin+6,rowY);
+    });
+    const pagOpts=[{label:'Numerário'},{label:'Cheque nº ____________________'},{label:'Transferência bancária:'}];
+    pagOpts.forEach((p,i)=>{
+      const rowY=y+i*lineH;
+      doc.setDrawColor(...GRAY);doc.setLineWidth(0.3);doc.rect(colMid+4,rowY-3.5,4,4);
+      doc.text(p.label,colMid+10,rowY);
+    });
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...RED);
+    doc.text('0018 0003 26422055020 11',colMid+10,y+2*lineH+5);
+    doc.setFont('helvetica','normal');doc.setTextColor(...BLK);
+    y+=mods.length*lineH+10;
+    // Assinatura
+    doc.setDrawColor(...LGRAY);doc.setLineWidth(0.3);doc.line(margin,y,W-margin,y);y+=10;
+    doc.text('Data: _____ / _____ / _________',margin,y);y+=14;
+    doc.setDrawColor(...GRAY);doc.line(margin,y,margin+70,y);
+    doc.setFontSize(8);doc.setTextColor(...GRAY);
+    doc.text('Assinatura do Sócio / Encarregado de Educação',margin,y+5);
+    doc.rect(W-margin-55,y-18,55,26);
+    doc.text('Validação do Clube',W-margin-52,y-12);
+    doc.text('Data: _____ / _____ / _____',W-margin-52,y-6);
+    // Rodapé
+    doc.setFillColor(...RED);doc.rect(0,H-14,W,14,'F');
+    doc.setTextColor(...WHITE);doc.setFontSize(7);
+    doc.text(clubeNome+' — Novo Sócio Nº '+String(s.num_socio||''),margin,H-7);
+    doc.text('Época '+epoca,W-margin,H-7,{align:'right'});
+    doc.save('aviso-quota-socio-'+String(s.num_socio||'novo')+'.pdf');
+    toast('📬 Aviso de quota gerado!');
+  }catch(err){console.error(err);toast('❌ Erro ao gerar aviso: '+err.message);}
 }
 
 async function gerarCartoesSocios(){
