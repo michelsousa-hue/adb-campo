@@ -1627,7 +1627,7 @@ function pinEnter(){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='flex';
     document.getElementById('topbar-user').textContent=p.name;
-    setupForUser(); renderPage('dashboard');
+    setupPWA(); setupForUser(); renderPage('dashboard');
   } else {
     document.getElementById('pin-error').textContent='PIN incorreto. Tenta novamente.';
     currentPin=''; updateDots();
@@ -6896,6 +6896,46 @@ function aplicarIdentidadeClube(){
 document.getElementById('ses-data').value=new Date().toISOString().split('T')[0];
 document.getElementById('conv-data').value=new Date().toISOString().split('T')[0];
 loadAllData().then(async ()=>{await loadCaixa();aplicarIdentidadeClube();console.log('ADB Campo — dados carregados do Supabase');});
+// ═══ PWA — Manifest dinâmico com dados do clube ═══
+function setupPWA(){
+  const nome = DB.config?.clube_nome || 'GestiOK';
+  const cor  = DB.config?.clube_cor  || '#8B1A1A';
+  const logo = DB.config?.clube_logo || (typeof LOGO_B64 !== 'undefined' ? LOGO_B64 : null);
+  let themeMeta = document.querySelector('meta[name="theme-color"]');
+  if(!themeMeta){ themeMeta=document.createElement('meta'); themeMeta.name='theme-color'; document.head.appendChild(themeMeta); }
+  themeMeta.content = cor;
+  let appleTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if(!appleTitleMeta){ appleTitleMeta=document.createElement('meta'); appleTitleMeta.name='apple-mobile-web-app-title'; document.head.appendChild(appleTitleMeta); }
+  appleTitleMeta.content = nome;
+  const icons = logo ? [
+    { src: logo, sizes: '192x192', type: logo.startsWith('data:image/png') ? 'image/png' : 'image/jpeg' },
+    { src: logo, sizes: '512x512', type: logo.startsWith('data:image/png') ? 'image/png' : 'image/jpeg' },
+  ] : [];
+  const manifest = {
+    name: nome + ' — GestiOK',
+    short_name: nome,
+    description: 'Gestão de clube de hóquei em patins',
+    start_url: './',
+    display: 'standalone',
+    background_color: cor,
+    theme_color: cor,
+    orientation: 'portrait',
+    icons,
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  let link = document.querySelector('link[rel="manifest"]');
+  if(!link){ link=document.createElement('link'); link.rel='manifest'; document.head.appendChild(link); }
+  if(link.href && link.href.startsWith('blob:')) URL.revokeObjectURL(link.href);
+  link.href = url;
+  if(logo){
+    let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+    if(!appleIcon){ appleIcon=document.createElement('link'); appleIcon.rel='apple-touch-icon'; document.head.appendChild(appleIcon); }
+    appleIcon.href = logo;
+  }
+}
+// ═══ FIM PWA ═══
+
 </script>
 </body>
 </html>
