@@ -4914,8 +4914,8 @@ function renderSocios(){
   const isTesour=currentUser?.role==='tesoureiro';
   const isCoord=currentUser?.key==='coord'||currentUser?.role==='coord';
   const canAccess=isTesour||isCoord;
-  // Sócios visível só para tesoureiro (e coord em modo legado)
-  document.querySelectorAll('[data-page="socios"]').forEach(el=>el.style.display=(isTesour?'flex':'none'));
+  // Sócios visível para tesoureiro e admin
+  document.querySelectorAll('[data-page="socios"]').forEach(el=>el.style.display=((isTesour||isCoord)?'flex':'none'));
   const lista=DB.socios||[];
   const statsEl=document.getElementById('soc-stats');
   if(statsEl){
