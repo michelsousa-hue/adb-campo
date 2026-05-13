@@ -3764,49 +3764,14 @@ function renderInscricoes(){
 }
 async function aprovarInscricao(id){
   const inscr = DB.inscricoes.find(i=>i.id===id);
-  if(!inscr||!confirm(`Aprovar inscrição de ${inscr.nome}?\n\nSerá criado automaticamente:\n• Registo de sócio com nº atribuído\n• Cartão de sócio (quota pendente)`))return;
+  if(!inscr||!confirm(`Aprovar inscrição de ${inscr.nome}?`))return;
   showLoading(true);
-  // 1. Gerar nº de sócio
-  const numSocio = _nextNumSocio();
-  // 2. Criar registo na tabela socios
-  const novoSocio = {
-    id: uid(),
-    nome: inscr.nome,
-    num_socio: String(numSocio),
-    tipo: inscr.escalao ? 'atleta' : 'externo',
-    sub: inscr.escalao||null,
-    estado: 'Activo',
-    quota: 'Em falta',
-    periodo: 'anual',
-    valor: null,
-    ultimo_pag: null,
-    contacto: inscr.telefone||null,
-    obs: `Inscrito via formulário online. CC: ${inscr.cc_num||'—'}`,
-    inscricao_id: id,
-    cartao_impresso: false,
-  };
-  // Tenta inserir com inscricao_id; se der 400 (coluna não existe) tenta sem
-  let insRes = await sb.from('socios').insert(novoSocio);
-  if(insRes.error && insRes.error.code==='42703'){
-    const {inscricao_id, ...semInscricaoId} = novoSocio;
-    insRes = await sb.from('socios').insert(semInscricaoId);
-    if(!insRes.error) toast('⚠️ Corre o SQL socios_inscricao_id.sql no Supabase para ligar sócios às inscrições.');
-  }
-  if(insRes.error){showLoading(false);toast('❌ Erro ao criar sócio: '+insRes.error.message);return;}
-  DB.socios.push(novoSocio);
-  // 3. Marcar inscrição como aprovada
-  await sb.from('inscricoes').update({
-    estado:'Aprovada',
-    aprovado_em:new Date().toISOString(),
-    aprovado_por:currentUser?.name||'Admin'
-  }).eq('id',id);
+  await sb.from('inscricoes').update({estado:'Aprovada',aprovado_em:new Date().toISOString(),aprovado_por:currentUser?.name||'Admin'}).eq('id',id);
   inscr.estado='Aprovada';
   inscr.aprovado_em=new Date().toISOString();
   showLoading(false);
-  toast(`✅ ${inscr.nome} aprovado! Sócio nº ${numSocio} criado.`);
+  toast('✅ Inscrição aprovada! Podes agora gerar a ficha de filiação.');
   renderInscricoes();
-  // 4. Gerar cartão automaticamente
-  await gerarCartaoSocioUnico(novoSocio.id);
 }
 async function rejeitarInscricao(id){
   const inscr = DB.inscricoes.find(i=>i.id===id);
@@ -3827,25 +3792,6 @@ async function apagarInscricao(id){
   showLoading(false);
   toast('🗑️ Inscrição apagada');
   renderInscricoes();
-}
-function verFichaInscricao(inscricaoId){
-  const i = DB.inscricoes.find(x=>x.id===inscricaoId);
-  if(!i){toast('Ficha de inscrição não encontrada');return;}
-  // Navegar para a página de inscrições e mostrar o registo
-  navigate('inscricoes');
-  setTimeout(()=>{
-    // Limpar filtros e mostrar todos
-    const filEl=document.getElementById('inscr-fil-estado');
-    const searchEl=document.getElementById('inscr-search');
-    if(filEl)filEl.value='';
-    if(searchEl)searchEl.value=i.nome;
-    renderInscricoes();
-    // Scroll para o registo
-    setTimeout(()=>{
-      const cards=document.querySelectorAll('#inscricoes-list > div > div');
-      if(cards.length) cards[0].scrollIntoView({behavior:'smooth',block:'center'});
-    },300);
-  },200);
 }
 async function gerarFichaFiliacao(id){
   const i = DB.inscricoes.find(x=>x.id===id);
@@ -4943,13 +4889,12 @@ function _renderSociosGestao(isCoord){
   grid.innerHTML=filtered.map(s=>{
     const estCls=s.estado==='Activo'?'soc-badge-ativo':s.estado==='Inactivo'?'soc-badge-inativo':'soc-badge-pendente';
     const qCls=s.quota==='Paga'?'quota-paga':s.quota==='Em falta'?'quota-falta':'quota-parcial';
-    const inscricaoBtn=s.inscricao_id?`<button class="btn btn-sm" title="Ver ficha de inscrição" onclick="verFichaInscricao('${s.inscricao_id}')" style="color:#059669;border-color:#6EE7B7">📋</button>`:'';
+    const atleta=s.tipo==='atleta'&&s.atleta_id?DB.jogadores.find(x=>x.id===s.atleta_id):null;
     const editBtns=isCoord?`<div style="display:flex;gap:4px">
       <button class="btn btn-sm" onclick="openModalSocio('${s.id}')" style="color:#2563EB;border-color:#BFDBFE">\u270f\ufe0f</button>
       <button class="btn btn-sm" onclick="deleteSocio('${s.id}')" style="color:#DC2626;border-color:#FCA5A5">\ud83d\uddd1\ufe0f</button>
       ${s.cartao_impresso?`<button class="btn btn-sm" title="Reimprimir cartão" onclick="reimprimirCartao('${s.id}')" style="color:#7C3AED;border-color:#C4B5FD">🔄</button>`:''}
-      ${inscricaoBtn}
-    </div>`:(inscricaoBtn?`<div style="display:flex;gap:4px">${inscricaoBtn}</div>`:'');
+    </div>`:'';
     return`<div class="soc-card">
       <div class="soc-card-header">
         <div>
@@ -6576,54 +6521,6 @@ async function gerarAvisosRenovacao(){
     doc.save('renovacao-quotas-'+epoca.replace('/','_')+'.pdf');
     toast('📬 '+lista.length+' ficha(s) de renovação gerada(s)!');
   }catch(err){console.error(err);toast('❌ Erro: '+err.message);}
-}
-
-// Gera cartão CR80 para um único sócio (usado ao aprovar inscrição)
-async function gerarCartaoSocioUnico(socioId){
-  const s = DB.socios.find(x=>x.id===socioId);
-  if(!s){toast('Sócio não encontrado');return;}
-  try{
-    const {jsPDF}=window.jspdf;
-    const clubeNome=(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'GestiOK').trim();
-    const epoca=DB.config?.epoca||'2025/2026';
-    const hexCor=DB.config?.clube_cor||'#8B1A1A';
-    function hexRgb(hex){const h=hex.replace('#','');return[parseInt(h.substring(0,2),16),parseInt(h.substring(2,4),16),parseInt(h.substring(4,6),16)];}
-    const [cr,cg,cb]=hexRgb(hexCor.startsWith('#')?hexCor:'#8B1A1A');
-    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    const cW=85.6,cH=54;
-    const x=(210-cW)/2, y=(297-cH)/2;
-    let logoCirc=null;
-    try{const rawLogo=DB.config?.clube_logo||(typeof LOGO_B64!=='undefined'?LOGO_B64:null);if(rawLogo)logoCirc=await makeCircularLogo(rawLogo,300).catch(()=>null);}catch(e){}
-    // Fundo
-    doc.setFillColor(cr,cg,cb);doc.roundedRect(x,y,cW,cH,3,3,'F');
-    doc.setFillColor(255,255,255);doc.roundedRect(x+0.5,y+0.5,cW-1,cH-1,2.5,2.5,'F');
-    doc.setFillColor(cr,cg,cb);doc.roundedRect(x,y,cW,14,3,3,'F');
-    doc.setFillColor(cr,cg,cb);doc.rect(x,y+10,cW,4,'F');
-    // Logo
-    if(logoCirc){try{doc.addImage(logoCirc,'PNG',x+2,y+1,12,12);}catch(e){}}
-    // Nome clube
-    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(7);
-    doc.text(clubeNome,x+16,y+6);
-    doc.setFont('helvetica','normal');doc.setFontSize(5.5);
-    doc.text('Cartão de Sócio — '+epoca,x+16,y+10.5);
-    // Nome sócio
-    doc.setTextColor(cr,cg,cb);doc.setFont('helvetica','bold');doc.setFontSize(9);
-    const nomeLinhas=doc.splitTextToSize(s.nome,cW-20);
-    doc.text(nomeLinhas,x+3,y+21);
-    // Nº sócio
-    if(s.num_socio){doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(100,100,100);doc.text('N. '+s.num_socio,x+3,y+37);}
-    // Badge quota pendente
-    doc.setFillColor(220,38,38);doc.roundedRect(x+3,y+39,28,6,1,1,'F');
-    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(5.5);
-    doc.text('QUOTA PENDENTE',x+5,y+43.5);
-    // Escalão
-    if(s.sub){doc.setTextColor(100,100,100);doc.setFont('helvetica','normal');doc.setFontSize(6);doc.text(s.sub,x+3,y+49);}
-    // Rodapé
-    doc.setTextColor(180,180,180);doc.setFontSize(4.5);
-    doc.text('GestiOK • '+clubeNome,x+cW-2,y+cH-2,{align:'right'});
-    doc.save('cartao-socio-'+s.nome.replace(/\s+/g,'-').toLowerCase()+'.pdf');
-    toast('🪪 Cartão de sócio gerado!');
-  }catch(err){console.error(err);toast('❌ Erro ao gerar cartão: '+err.message);}
 }
 
 async function gerarCartoesSocios(){
