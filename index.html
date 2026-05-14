@@ -508,6 +508,10 @@ textarea.form-input{resize:vertical;min-height:70px}
           <div class="placard-teams"><span>ADB Campo</span><span id="jogo-adv-lbl">Adversário</span></div>
           <div class="placard-score"><span id="sc-home">0</span> — <span id="sc-away">0</span></div>
           <div class="placard-timer">⏱ <span id="jogo-clock">00:00</span></div>
+          <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
+            <button onclick="ajustarCronometro(-1)" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:white;font-size:16px;font-weight:700;cursor:pointer">−</button>
+            <button onclick="ajustarCronometro(1)" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:white;font-size:16px;font-weight:700;cursor:pointer">+</button>
+          </div>
           <div style="font-size:12px;opacity:.8;margin-top:2px;font-weight:600" id="jogo-parte-display">Parte 1</div>
           <div style="font-size:11px;opacity:.6;margin-top:2px" id="jogo-status">Pronto para iniciar</div>
         </div>
@@ -525,6 +529,9 @@ textarea.form-input{resize:vertical;min-height:70px}
         </div>
         <div class="card">
           <div class="card-title">⚡ Registar evento</div>
+          <div style="margin-bottom:10px">
+            <button id="btn-timer-2" onclick="toggleTimer()" style="width:100%;padding:10px;border-radius:8px;border:2px solid #059669;background:#D1FAE5;color:#065F46;font-size:14px;font-weight:700;cursor:pointer">▶ Iniciar</button>
+          </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
             <button class="btn btn-green btn-sm" onclick="regEvento('golo')">⚽ Golo</button>
             <button class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="regEvento('golo-s')">⚽ Golo sofrido</button>
@@ -3332,14 +3339,39 @@ function updatePartesConfig(){
   const total=np*dp;
   document.getElementById('jogo-config-info').innerHTML=`⚽ ${np} partes × ${dp} min = ${total} min de jogo — Parte <strong id="jogo-parte-label">${jogoState.parteAtual}/${np}</strong>`;
 }
+function syncTimerBtn(txt, disabled=false){
+  ['btn-timer','btn-timer-2'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.textContent=txt;
+    el.disabled=disabled;
+    // Update style of btn-timer-2
+    if(id==='btn-timer-2'){
+      if(txt.includes('Pausar')){
+        el.style.background='#FEF3C7';el.style.color='#92400E';el.style.borderColor='#FCD34D';
+      } else if(txt.includes('Fim')){
+        el.style.background='#F3F4F6';el.style.color='#6B7280';el.style.borderColor='#D1D5DB';
+      } else {
+        el.style.background='#D1FAE5';el.style.color='#065F46';el.style.borderColor='#059669';
+      }
+    }
+  });
+}
+function ajustarCronometro(minutos){
+  // Ajusta o timerSec em ± 1 minuto (60 segundos)
+  const durParteSec=jogoState.durParte*60;
+  jogoState.timerSec=Math.max(0,Math.min(durParteSec-1,jogoState.timerSec+(minutos*60)));
+  updateClock();
+  toast((minutos>0?'+':'')+minutos+' min — '+Math.floor(jogoState.timerSec/60)+'m'+('0'+(jogoState.timerSec%60)).slice(-2)+'s decorridos');
+}
 function toggleTimer(){
   if(jogoState.running){
     jogoState.running=false;clearInterval(timerInterval);timerInterval=null;
-    document.getElementById('btn-timer').textContent='▶ Continuar';
+    syncTimerBtn('▶ Continuar');
     document.getElementById('jogo-status').textContent='⏸ Pausado';
   } else {
     jogoState.running=true;jogoState.parteIniciada=true;
-    document.getElementById('btn-timer').textContent='⏸ Pausar';
+    syncTimerBtn('⏸ Pausar');
     document.getElementById('jogo-status').innerHTML='<span class="live-dot"></span>A decorrer';
     document.getElementById('jogo-parte-display').textContent='Parte '+jogoState.parteAtual+'/'+jogoState.numPartes;
     timerInterval=setInterval(()=>{
@@ -3355,13 +3387,12 @@ function toggleTimer(){
         if(jogoState.parteAtual<jogoState.numPartes){
           jogoState.parteAtual++;
           const msg=jogoState.parteAtual<=jogoState.numPartes?`Fim da parte ${jogoState.parteAtual-1}! Clica Continuar para a parte ${jogoState.parteAtual}.`:`Fim da parte ${jogoState.parteAtual-1}!`;
-          document.getElementById('btn-timer').textContent='▶ Parte '+jogoState.parteAtual;
+          syncTimerBtn('▶ Parte '+jogoState.parteAtual);
           document.getElementById('jogo-status').textContent='⏸ Intervalo';
           document.getElementById('jogo-parte-display').textContent='Parte '+jogoState.parteAtual+'/'+jogoState.numPartes;
           alert('🔔 '+msg);
         } else {
-          document.getElementById('btn-timer').textContent='✓ Fim';
-          document.getElementById('btn-timer').disabled=true;
+          syncTimerBtn('✓ Fim', true);
           document.getElementById('jogo-status').textContent='⏹ Jogo terminado';
           document.getElementById('jogo-parte-display').textContent='Fim do jogo!';
           alert('🏁 Jogo terminado! Resultado final: ADB Campo '+jogoState.scoreH+' — '+jogoState.scoreA+' '+document.getElementById('jogo-adv-inp').value);
@@ -3385,7 +3416,7 @@ function resetJogo(){
   const np=jogoState.numPartes,dp=jogoState.durParte;
   jogoState={scoreH:0,scoreA:0,eventos:[],emCampo:[],tempos:{},timerSec:0,running:false,paused:false,grupo:jogoState.grupo,numPartes:np,durParte:dp,parteAtual:1,parteIniciada:false,powerPlays:{favor:{ativo:false,inicio:null,lista:[]},contra:{ativo:false,inicio:null,lista:[]}},defesas:0,defesasJog:{},golosJog:{},convocados:jogoState.convocados||[]};
   renderJogoAoVivo();
-  document.getElementById('btn-timer').textContent='▶ Iniciar';
+  syncTimerBtn('▶ Iniciar');
   document.getElementById('btn-timer').disabled=false;
   document.getElementById('jogo-status').textContent='Pronto para iniciar';
   document.getElementById('jogo-parte-display').textContent='Parte 1';
