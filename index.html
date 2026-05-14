@@ -2440,8 +2440,8 @@ function renderAvalRegisto(){
           <select class="form-input" id="reg-jog-sel" onchange="renderRegForm()" style="max-width:280px">
             <option value="">— Escolher jogador —</option>
             ${jogs.map(j=>{
-              const hasPre=pre.find(d=>d.nome===j.nome);
-              const hasPos=pos.find(d=>d.nome===j.nome);
+              const hasPre=pre.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
+              const hasPos=pos.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
               const badge=hasPos?'✅':hasPre?'📋':'—';
               return`<option value="${j.nome}">${badge} ${j.nome} (${j.sub})</option>`;
             }).join('')}
@@ -2461,8 +2461,8 @@ function renderAvalRegisto(){
       <div class="card-title">📊 Estado das avaliações — ${fichaAtiva.nome}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px">
         ${jogs.map(j=>{
-          const hasPre=pre.find(d=>d.nome===j.nome);
-          const hasPos=pos.find(d=>d.nome===j.nome);
+          const hasPre=pre.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
+          const hasPos=pos.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
           const color=hasPos?'#F0FDF4':hasPre?'#FFF7ED':'#F9FAFB';
           const border=hasPos?'#86EFAC':hasPre?'#FCD34D':'#E5E7EB';
           const status=hasPos?'✅ Pré + Pós':hasPre?'📋 Só Pré':'— Sem avaliação';
@@ -5880,8 +5880,8 @@ async function gerarPDFJogador(){
   }
 
   // ── Avaliacao tecnica ──
-  const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&d.nome===j.nome);
-  const pos=DB.avaliacoes.find(d=>d.tipo==='pos'&&d.nome.trim()===j.nome.trim());
+  const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&(d.jogador_id===j.id||(d.jogador_id==null&&d.nome.trim()===j.nome.trim())));
+  const pos=DB.avaliacoes.find(d=>d.tipo==='pos'&&(d.jogador_id===j.id||(d.jogador_id==null&&d.nome.trim()===j.nome.trim())));
   if(pre){
     // gestos do pré-teste (compatível com legacy e novas fichas)
     const preGestos = getGestosForAval(pre);
