@@ -796,6 +796,7 @@ textarea.form-input{resize:vertical;min-height:70px}
             <button class="btn" onclick="openModalTransferencia()" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE">🔄 Transferência</button>
             <button class="btn btn-primary" onclick="openModalMovimento()">+ Movimento</button>
             <button class="btn" onclick="gerarPDFCaixa()">📄 Relatório PDF</button>
+            <button class="btn" onclick="gerarPDFCategoria()" style="background:#FFF7ED;color:#92400E;border-color:#FCD34D">📊 PDF por Categoria</button>
           </div>
         </div>
         <!-- Resumo por conta -->
@@ -813,7 +814,10 @@ textarea.form-input{resize:vertical;min-height:70px}
             <option value="receita">Receitas</option>
             <option value="despesa">Despesas</option>
           </select>
-          <select class="form-input" id="caixa-fil-epoca" onchange="renderCaixa()" style="max-width:160px" id="caixa-fil-epoca"></select>
+          <select class="form-input" id="caixa-fil-categoria" onchange="renderCaixa()" style="max-width:180px">
+            <option value="">Todas as categorias</option>
+          </select>
+          <select class="form-input" id="caixa-fil-epoca" onchange="renderCaixa()" style="max-width:160px"></select>
           <input type="text" class="form-input" id="caixa-search" onkeyup="renderCaixa()" placeholder="🔍 Pesquisar…" style="max-width:200px">
         </div>
         <!-- Lista movimentos -->
@@ -5876,7 +5880,7 @@ async function gerarPDFJogador(){
   }
 
   // ── Avaliacao tecnica ──
-  const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&d.nome.trim()===j.nome.trim());
+  const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&d.nome===j.nome);
   const pos=DB.avaliacoes.find(d=>d.tipo==='pos'&&d.nome.trim()===j.nome.trim());
   if(pre){
     // gestos do pré-teste (compatível com legacy e novas fichas)
@@ -6080,6 +6084,7 @@ function renderCaixa(){
   const movs=DB_CAIXA.movimentos||[];
   const filConta=(document.getElementById('caixa-fil-conta')?.value)||'';
   const filTipo=(document.getElementById('caixa-fil-tipo')?.value)||'';
+  const filCat=(document.getElementById('caixa-fil-categoria')?.value)||'';
   const search=((document.getElementById('caixa-search')?.value)||'').toLowerCase();
   const selEpoca=document.getElementById('caixa-fil-epoca');
   if(selEpoca){
@@ -6087,11 +6092,19 @@ function renderCaixa(){
     selEpoca.innerHTML=`<option value="">Todas as épocas</option>`+_epocas().map(e=>`<option value="${e}" ${e===curVal?'selected':''}>${e}</option>`).join('');
   }
   const filEpoca=(document.getElementById('caixa-fil-epoca')?.value)||'';
+  // Actualizar selector de categorias dinamicamente
+  const selCat=document.getElementById('caixa-fil-categoria');
+  if(selCat){
+    const todasCats=[...new Set(movs.map(m=>m.categoria||'').filter(c=>c&&c!=='Transferência Interna'))].sort();
+    const curCat=selCat.value;
+    selCat.innerHTML='<option value="">Todas as categorias</option>'+todasCats.map(c=>`<option value="${c}" ${c===curCat?'selected':''}>${c}</option>`).join('');
+  }
   // Excluir transferências internas dos totais globais
   const filtered=movs.filter(m=>
     (!filConta||m.conta===filConta)&&
     (!filTipo||m.tipo===filTipo)&&
     (!filEpoca||m.epoca===filEpoca)&&
+    (!filCat||m.categoria===filCat)&&
     (!search||(m.descricao||'').toLowerCase().includes(search)||(m.categoria||'').toLowerCase().includes(search))
   );
   const resumo=document.getElementById('caixa-resumo');
@@ -6504,6 +6517,133 @@ async function gerarPDFCaixa(){
 }
 
 // ═══ CARTÕES DE SÓCIO CR80 ═══
+async function gerarPDFCategoria(){
+  const {jsPDF}=window.jspdf;
+  const movs=DB_CAIXA.movimentos||[];
+  const filEpoca=(document.getElementById('caixa-fil-epoca')?.value)||'';
+  const filCat=(document.getElementById('caixa-fil-categoria')?.value)||'';
+  const filTipo=(document.getElementById('caixa-fil-tipo')?.value)||'';
+  const clubeNome=String(DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'GestiOK').trim();
+  const epoca=filEpoca||_currentEpoca()||'Todas as épocas';
+  const RED=getCorClube?getCorClube():[139,26,26];
+  const [cr,cg,cb]=Array.isArray(RED)?RED:[139,26,26];
+  const WHITE=[255,255,255],BLK=[17,24,39],GRAY=[107,114,128],LGRAY=[243,244,246];
+  const logoCircular=await makeCircularLogo(LOGO_B64,600).catch(()=>null);
+
+  // Movimentos filtrados (sem transferências internas)
+  const filtered=movs.filter(m=>
+    m.categoria!=='Transferência Interna'&&
+    (!filEpoca||m.epoca===filEpoca)&&
+    (!filTipo||m.tipo===filTipo)
+  );
+
+  // Agrupar por categoria
+  const catMap={};
+  filtered.forEach(m=>{
+    const cat=m.categoria||'Sem categoria';
+    if(!catMap[cat]) catMap[cat]={receita:0,despesa:0,movs:[]};
+    catMap[cat].movs.push(m);
+    if(m.tipo==='receita') catMap[cat].receita+=(parseFloat(m.valor)||0);
+    else catMap[cat].despesa+=(parseFloat(m.valor)||0);
+  });
+
+  // Se filtrado por categoria específica, só mostra essa
+  const cats=filCat?[filCat]:Object.keys(catMap).sort();
+  if(!cats.length){toast('Sem movimentos para gerar relatório');return;}
+
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210,mL=16,mR=16,cW=W-mL-mR;
+  let y=0;
+  const newPage=()=>{doc.addPage();y=0;addHeader();};
+  const checkY=(h)=>{if(y+h>275)newPage();};
+
+  function addHeader(){
+    doc.setFillColor(cr,cg,cb);doc.rect(0,0,W,26,'F');
+    try{if(logoCircular)doc.addImage(logoCircular,'PNG',mL,3,20,20);else doc.addImage(LOGO_B64,'JPEG',mL,3,20,20);}catch(e){}
+    doc.setTextColor(...WHITE);doc.setFont('helvetica','bold');doc.setFontSize(12);
+    doc.text(clubeNome,mL+24,11);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);
+    doc.text('Relatório por Categoria — Época '+epoca+(filCat?' — '+filCat:''),mL+24,17);
+    doc.text('Emitido em '+new Date().toLocaleDateString('pt-PT'),mL+24,22);
+    y=32;
+  }
+
+  addHeader();
+
+  // Resumo geral
+  const totalRec=filtered.filter(m=>m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+  const totalDesp=filtered.filter(m=>m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
+  doc.setFillColor(...LGRAY);doc.rect(mL,y,cW,16,'F');
+  doc.setTextColor(...BLK);doc.setFont('helvetica','bold');doc.setFontSize(9);
+  doc.text('RESUMO GERAL',mL+3,y+6);
+  doc.setFont('helvetica','normal');
+  doc.text('Total Receitas: €'+totalRec.toFixed(2),mL+3,y+12);
+  doc.text('Total Despesas: €'+totalDesp.toFixed(2),mL+70,y+12);
+  doc.text('Saldo: €'+(totalRec-totalDesp).toFixed(2),mL+140,y+12);
+  y+=22;
+
+  // Por categoria
+  cats.forEach(cat=>{
+    const data=catMap[cat];
+    if(!data)return;
+    const movsOrdenados=data.movs.sort((a,b)=>new Date(b.data||0)-new Date(a.data||0));
+    checkY(20);
+    // Título da categoria
+    doc.setFillColor(cr,cg,cb);doc.rect(mL,y,cW,9,'F');
+    doc.setTextColor(...WHITE);doc.setFont('helvetica','bold');doc.setFontSize(9);
+    doc.text(cat,mL+3,y+6);
+    doc.text('R: €'+data.receita.toFixed(2)+'  D: €'+data.despesa.toFixed(2)+'  Saldo: €'+(data.receita-data.despesa).toFixed(2),W-mR-2,y+6,{align:'right'});
+    y+=12;
+    // Cabeçalho tabela
+    doc.setFillColor(220,220,220);doc.rect(mL,y,cW,6,'F');
+    doc.setTextColor(...GRAY);doc.setFont('helvetica','bold');doc.setFontSize(7);
+    doc.text('Data',mL+2,y+4);
+    doc.text('Tipo',mL+28,y+4);
+    doc.text('Conta',mL+52,y+4);
+    doc.text('Descrição',mL+80,y+4);
+    doc.text('Valor',W-mR-2,y+4,{align:'right'});
+    y+=8;
+    // Movimentos
+    movsOrdenados.forEach((m,i)=>{
+      checkY(7);
+      if(i%2===0){doc.setFillColor(250,250,250);doc.rect(mL,y-4,cW,7,'F');}
+      doc.setTextColor(...BLK);doc.setFont('helvetica','normal');doc.setFontSize(7);
+      const dataStr=m.data?new Date(m.data+'T00:00:00').toLocaleDateString('pt-PT'):'-';
+      const tipoStr=m.tipo==='receita'?'📈 Receita':'📉 Despesa';
+      const contaStr=_contaLabel?_contaLabel(m.conta):(m.conta||'-');
+      const descStr=doc.splitTextToSize(m.descricao||'-',60)[0];
+      const valorStr='€'+parseFloat(m.valor||0).toFixed(2);
+      doc.text(dataStr,mL+2,y);
+      doc.text(tipoStr,mL+28,y);
+      doc.text(contaStr,mL+52,y);
+      doc.text(descStr,mL+80,y);
+      doc.setTextColor(m.tipo==='receita'?6:220,m.tipo==='receita'?95:38,m.tipo==='receita'?70:38);
+      doc.setFont('helvetica','bold');
+      doc.text(valorStr,W-mR-2,y,{align:'right'});
+      doc.setTextColor(...BLK);doc.setFont('helvetica','normal');
+      y+=7;
+    });
+    // Subtotal
+    checkY(8);
+    doc.setFillColor(240,240,240);doc.rect(mL,y,cW,7,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...BLK);
+    doc.text('Subtotal '+cat,mL+2,y+5);
+    doc.setTextColor(data.receita-data.despesa>=0?6:220,data.receita-data.despesa>=0?95:38,data.receita-data.despesa>=0?70:38);
+    doc.text('€'+(data.receita-data.despesa).toFixed(2),W-mR-2,y+5,{align:'right'});
+    y+=12;
+  });
+
+  // Rodapé última página
+  doc.setFillColor(cr,cg,cb);doc.rect(0,287,W,10,'F');
+  doc.setTextColor(...WHITE);doc.setFontSize(7);doc.setFont('helvetica','normal');
+  doc.text(clubeNome+' — Relatório por Categoria',mL,293);
+  doc.text('Época '+epoca+' · '+new Date().toLocaleDateString('pt-PT'),W-mR,293,{align:'right'});
+
+  const label=filCat?filCat.replace(/\s+/g,'-').toLowerCase():'todas-categorias';
+  doc.save('caixa-categorias-'+label+'-'+epoca.replace('/','_')+'.pdf');
+  toast('📊 Relatório por categoria gerado!');
+}
+
 async function gerarAvisosRenovacao(){
   const lista = _socFiltered();
   if(!lista.length){toast('Sem sócios com os filtros actuais');return;}
