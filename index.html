@@ -5708,18 +5708,57 @@ async function gerarPDFJogador(){
     if(y+needed>248){newPage();}
   }
 
-  // ── Header ── (igual à ficha clínica)
+
+  // ── Header elegante ──
   const clubeNomeFI=DB.config?.clube_nome||document.querySelector('.topbar-title')?.textContent||'Clube';
   const epocaFI=DB.config?.epoca||'2025/2026';
-  const logoCircularFI=await makeCircularLogo(LOGO_B64,600).catch(()=>null);
-  doc.setFillColor(...RED);doc.rect(0,0,W,26,'F');
-  try{if(logoCircularFI)doc.addImage(logoCircularFI,'PNG',margin,3,20,20);else doc.addImage(LOGO_B64,'JPEG',margin,3,20,20);}catch(e){}
+
+  // Construir logo sem fundo branco: canvas com fundo vermelho + logo com multiply
+  let logoFI=null;
+  try{
+    await new Promise(res=>{
+      const img=new Image();
+      img.onload=()=>{
+        const sz=600;
+        const c=document.createElement('canvas');
+        c.width=c.height=sz;
+        const ctx=c.getContext('2d');
+        // Fundo vermelho sólido
+        ctx.fillStyle='#8B1A1A';
+        ctx.fillRect(0,0,sz,sz);
+        // Desenhar logo com multiply para eliminar branco
+        ctx.globalCompositeOperation='multiply';
+        ctx.drawImage(img,0,0,sz,sz);
+        logoFI=c.toDataURL('image/png');
+        res();
+      };
+      img.onerror=res;
+      img.src=LOGO_B64;
+    });
+  }catch(e){}
+
+  // Fundo vermelho do header (altura 28)
+  doc.setFillColor(...RED);doc.rect(0,0,W,28,'F');
+
+  // Linha dourada decorativa no fundo do header
+  doc.setFillColor(200,150,12);doc.rect(0,27,W,1,'F');
+
+  // Logo (22x22 mm, verticalmente centrado no header)
+  try{
+    if(logoFI) doc.addImage(logoFI,'PNG',margin,3,22,22);
+    else if(LOGO_B64) doc.addImage(LOGO_B64,'JPEG',margin,3,22,22);
+  }catch(e){}
+
+  // Textos brancos
   doc.setTextColor(255,255,255);
-  doc.setFontSize(15);doc.setFont('helvetica','bold');
-  doc.text(clubeNomeFI+' - Processo do Jogador',margin+24,11);
+  doc.setFontSize(14);doc.setFont('helvetica','bold');
+  doc.text(clubeNomeFI.toUpperCase(),margin+26,11);
   doc.setFontSize(9);doc.setFont('helvetica','normal');
-  doc.text('Época '+epocaFI+' · Gerado em '+new Date().toLocaleDateString('pt-PT'),margin+24,18);
-  y=34;
+  doc.text('Processo Individual do Atleta',margin+26,17);
+  doc.setFontSize(8);doc.setTextColor(220,200,200);
+  doc.text('Época '+epocaFI+'  ·  Emitido em '+new Date().toLocaleDateString('pt-PT'),margin+26,23);
+
+  y=36;
     // ── Player info ──
   doc.setTextColor(0,0,0);
   if(j.foto){
