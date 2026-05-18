@@ -6595,18 +6595,6 @@ async function gerarPDFCategoria(){
 
   addHeader();
 
-  // Resumo geral
-  const totalRec=filtered.filter(m=>m.tipo==='receita').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
-  const totalDesp=filtered.filter(m=>m.tipo==='despesa').reduce((a,m)=>a+(parseFloat(m.valor)||0),0);
-  doc.setFillColor(...LGRAY);doc.rect(mL,y,cW,16,'F');
-  doc.setTextColor(...BLK);doc.setFont('helvetica','bold');doc.setFontSize(9);
-  doc.text('RESUMO GERAL',mL+3,y+6);
-  doc.setFont('helvetica','normal');
-  doc.text('Total Receitas: EUR '+totalRec.toFixed(2),mL+3,y+12);
-  doc.text('Total Despesas: EUR '+totalDesp.toFixed(2),mL+70,y+12);
-  doc.text('Saldo: EUR '+(totalRec-totalDesp).toFixed(2),mL+140,y+12);
-  y+=22;
-
   // Por categoria
   cats.forEach(cat=>{
     const data=catMap[cat];
