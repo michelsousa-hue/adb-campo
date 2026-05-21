@@ -839,7 +839,6 @@ textarea.form-input{resize:vertical;min-height:70px}
               <button class="btn btn-primary" onclick="openModalFactura()">+ Lançar Factura</button>
             </div>
           </div>
-          <div id="facturas-divida-card"></div>
           <div class="card" style="padding:0;overflow:hidden">
             <div id="facturas-lista"></div>
           </div>
@@ -6146,6 +6145,9 @@ function renderCaixa(){
       const saldoCaixa=saldoConta('caixa_fisica');
       const saldoOutros=saldoConta('outros');
       const saldoOficial=saldoDep+saldoCaixa+saldoOutros;
+      const factPend=(DB_CAIXA.facturas||[]).filter(f=>f.estado==='Pendente'||f.estado==='pendente');
+      const totalDivida=factPend.reduce((s,f)=>s+(parseFloat(f.valor)||0),0);
+      const divCard=factPend.length>0?`<div class="metric-card" style="border-top:3px solid #F59E0B"><div class="metric-label">🔴 Dívidas Pendentes</div><div class="metric-value metric-danger">€${totalDivida.toFixed(2)}</div><div style="font-size:10px;color:var(--gray-400);margin-top:2px">${factPend.length} factura${factPend.length!==1?'s':''}</div></div>`:'';
       resumo.innerHTML=`
         <div class="metric-card"><div class="metric-label">📈 Total Receitas</div><div class="metric-value metric-ok">€${rec.toFixed(2)}</div></div>
         <div class="metric-card"><div class="metric-label">📉 Total Despesas</div><div class="metric-value ${desp>0?'metric-danger':''}">€${desp.toFixed(2)}</div></div>
@@ -6153,6 +6155,7 @@ function renderCaixa(){
         <div class="metric-card" style="border-top:3px solid #1D4ED8"><div class="metric-label">🏦 Depósitos</div><div class="metric-value ${saldoDep>=0?'metric-ok':'metric-danger'}">€${saldoDep.toFixed(2)}</div></div>
         <div class="metric-card" style="border-top:3px solid #059669"><div class="metric-label">💵 Caixa</div><div class="metric-value ${saldoCaixa>=0?'metric-ok':'metric-danger'}">€${saldoCaixa.toFixed(2)}</div></div>
         <div class="metric-card" style="border-top:3px solid #7C3AED"><div class="metric-label">📂 Outros Fluxos</div><div class="metric-value ${saldoOutros>=0?'metric-ok':'metric-danger'}">€${saldoOutros.toFixed(2)}</div></div>
+        ${divCard}
         <div class="metric-card" style="border-top:3px solid #DC2626;grid-column:span 2"><div class="metric-label">🏛️ Saldo Total das Contas</div><div class="metric-value ${saldoOficial>=0?'metric-ok':'metric-danger'}">€${saldoOficial.toFixed(2)}</div></div>`;
     }
   }
@@ -6365,30 +6368,6 @@ function renderFacturas(){
   const totalDivida=pendentes.reduce((s,f)=>s+(parseFloat(f.valor)||0),0);
   const hoje2=new Date().toISOString().split('T')[0];
   const vencidas=pendentes.filter(f=>f.vencimento&&f.vencimento<hoje2);
-  const totalVencido=vencidas.reduce((s,f)=>s+(parseFloat(f.valor)||0),0);
-  const cardDiv=document.getElementById('facturas-divida-card');
-  if(cardDiv){
-    if(pendentes.length>0){
-      cardDiv.style.display='';
-      cardDiv.innerHTML=`
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-          <div class="metric-card" style="flex:1;min-width:140px;border-top:3px solid #DC2626">
-            <div class="metric-label">🔴 Total em Dívida</div>
-            <div class="metric-value metric-danger">€${totalDivida.toFixed(2)}</div>
-            <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${pendentes.length} factura${pendentes.length!==1?'s':''} pendente${pendentes.length!==1?'s':''}</div>
-          </div>
-          ${vencidas.length>0?`
-          <div class="metric-card" style="flex:1;min-width:140px;border-top:3px solid #F59E0B">
-            <div class="metric-label">⚠️ Já Vencidas</div>
-            <div class="metric-value" style="color:#B45309">€${totalVencido.toFixed(2)}</div>
-            <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${vencidas.length} factura${vencidas.length!==1?'s':''} em atraso</div>
-          </div>`:''}
-        </div>`;
-    } else {
-      cardDiv.style.display='none';
-      cardDiv.innerHTML='';
-    }
-  }
   const el=document.getElementById('facturas-lista');
   if(!el)return;
   if(!filtered.length){
