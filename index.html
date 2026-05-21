@@ -832,13 +832,14 @@ textarea.form-input{resize:vertical;min-height:70px}
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <select class="form-input" id="fact-fil-estado" onchange="renderFacturas()" style="max-width:150px">
                 <option value="">Todas</option>
-                <option value="pendente">🔴 Pendentes</option>
-                <option value="paga">✅ Pagas</option>
+                <option value="Pendente">🔴 Pendentes</option>
+                <option value="Paga">✅ Pagas</option>
               </select>
               <input type="date" class="form-input" id="fact-fil-data" onchange="renderFacturas()" title="Filtrar por data de vencimento" style="max-width:160px">
               <button class="btn btn-primary" onclick="openModalFactura()">+ Lançar Factura</button>
             </div>
           </div>
+          <div id="facturas-divida-card"></div>
           <div class="card" style="padding:0;overflow:hidden">
             <div id="facturas-lista"></div>
           </div>
@@ -6358,7 +6359,36 @@ function renderFacturas(){
   const filtered=lista.filter(f=>
     (!filEst||f.estado===filEst)&&
     (!filData||f.vencimento===filData)
-  ).sort((a,b)=>a.estado==='pendente'&&b.estado!=='pendente'?-1:1);
+  ).sort((a,b)=>(a.estado==='Pendente'||a.estado==='pendente')&&(b.estado!=='Pendente'&&b.estado!=='pendente')?-1:1);
+  // Card resumo dívidas pendentes
+  const pendentes=lista.filter(f=>f.estado==='Pendente'||(f.estado==='Pendente'||f.estado==='pendente'));
+  const totalDivida=pendentes.reduce((s,f)=>s+(parseFloat(f.valor)||0),0);
+  const hoje2=new Date().toISOString().split('T')[0];
+  const vencidas=pendentes.filter(f=>f.vencimento&&f.vencimento<hoje2);
+  const totalVencido=vencidas.reduce((s,f)=>s+(parseFloat(f.valor)||0),0);
+  const cardDiv=document.getElementById('facturas-divida-card');
+  if(cardDiv){
+    if(pendentes.length>0){
+      cardDiv.style.display='';
+      cardDiv.innerHTML=`
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+          <div class="metric-card" style="flex:1;min-width:140px;border-top:3px solid #DC2626">
+            <div class="metric-label">🔴 Total em Dívida</div>
+            <div class="metric-value metric-danger">€${totalDivida.toFixed(2)}</div>
+            <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${pendentes.length} factura${pendentes.length!==1?'s':''} pendente${pendentes.length!==1?'s':''}</div>
+          </div>
+          ${vencidas.length>0?`
+          <div class="metric-card" style="flex:1;min-width:140px;border-top:3px solid #F59E0B">
+            <div class="metric-label">⚠️ Já Vencidas</div>
+            <div class="metric-value" style="color:#B45309">€${totalVencido.toFixed(2)}</div>
+            <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${vencidas.length} factura${vencidas.length!==1?'s':''} em atraso</div>
+          </div>`:''}
+        </div>`;
+    } else {
+      cardDiv.style.display='none';
+      cardDiv.innerHTML='';
+    }
+  }
   const el=document.getElementById('facturas-lista');
   if(!el)return;
   if(!filtered.length){
@@ -6369,7 +6399,7 @@ function renderFacturas(){
   el.innerHTML=`<table class="tbl"><thead><tr>
     <th>Fornecedor</th><th>Nº Factura</th><th>Categoria</th><th>Vencimento</th><th>Época</th><th style="text-align:right">Valor</th><th>Estado</th><th></th>
   </tr></thead><tbody>`+filtered.map(f=>{
-    const vencido=f.estado==='pendente'&&f.vencimento<hoje;
+    const vencido=(f.estado==='Pendente'||f.estado==='pendente')&&f.vencimento<hoje;
     return `<tr style="${vencido?'background:#FFF5F5':''}">
       <td><strong>${f.fornecedor||'-'}</strong>${f.notas?`<br><span style="font-size:10px;color:var(--gray-400)">${f.notas}</span>`:''}</td>
       <td style="font-size:11px;color:var(--gray-500)">${f.numero||'-'}</td>
@@ -6377,9 +6407,9 @@ function renderFacturas(){
       <td style="color:${vencido?'#DC2626':'inherit'};font-weight:${vencido?'600':'400'}">${f.vencimento?new Date(f.vencimento+'T00:00:00').toLocaleDateString('pt-PT'):'-'}${vencido?' ⚠️':''}</td>
       <td style="font-size:11px;color:var(--gray-400)">${f.epoca||'-'}</td>
       <td style="text-align:right;font-weight:600;color:#DC2626">€${parseFloat(f.valor||0).toFixed(2)}</td>
-      <td>${f.estado==='paga'?'<span class="badge badge-ok">✅ Paga</span>':'<span style="background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:600">🔴 Pendente</span>'}</td>
+      <td>${(f.estado==='Paga'||f.estado==='paga')?'<span class="badge badge-ok">✅ Paga</span>':'<span style="background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:600">🔴 Pendente</span>'}</td>
       <td><div style="display:flex;gap:4px">
-        ${f.estado==='pendente'?`<button class="btn btn-sm" style="color:#059669;border-color:#6EE7B7;white-space:nowrap" onclick="pagarFactura('${f.id}')">💳 Pagar</button>`:''}
+        ${(f.estado==='Pendente'||f.estado==='pendente')?`<button class="btn btn-sm" style="color:#059669;border-color:#6EE7B7;white-space:nowrap" onclick="pagarFactura('${f.id}')">💳 Pagar</button>`:''}
         <button class="btn btn-sm" onclick="openModalFactura('${f.id}')" style="color:#2563EB;border-color:#BFDBFE">✏️</button>
         <button class="btn btn-sm" onclick="deleteFactura('${f.id}')" style="color:#DC2626;border-color:#FCA5A5">🗑️</button>
       </div></td>
@@ -6418,7 +6448,7 @@ async function saveFactura(){
     categoria:document.getElementById('fact-categoria').value,
     notas:document.getElementById('fact-notas').value.trim(),
     epoca:document.getElementById('fact-epoca').value,
-    estado:id?((DB_CAIXA.facturas||[]).find(x=>x.id===id)?.estado||'pendente'):'pendente',
+    estado:id?((DB_CAIXA.facturas||[]).find(x=>x.id===id)?.estado||'Pendente'):'Pendente',
   };
   if(id){
     await sb.from('facturas').update(rec).eq('id',id);
@@ -6456,7 +6486,7 @@ Será debitado automaticamente dos Depósitos.`))return;
   DB_CAIXA.movimentos.unshift(mov);
   _sortMovimentos();
   // Marcar factura como paga
-  const updated={...f,estado:'paga',data_pagamento:new Date().toISOString().split('T')[0]};
+  const updated={...f,estado:'Paga',data_pagamento:new Date().toISOString().split('T')[0]};
   await sb.from('facturas').update(updated).eq('id',id);
   const idx=DB_CAIXA.facturas.findIndex(x=>x.id===id);
   if(idx>=0)DB_CAIXA.facturas[idx]=updated;
@@ -6514,7 +6544,7 @@ async function gerarPDFCaixa(){
   doc.setFillColor(240,240,240);doc.rect(mL,y-4,cW,6,'F');
   doc.text('Data',mL+1,y);doc.text('Tipo',mL+25,y);doc.text('Conta',mL+50,y);doc.text('Categoria',mL+75,y);doc.text('Descricao',mL+110,y);doc.text('Valor EUR',mL+cW-15,y,{align:'right'});
   y+=4;doc.setFont('helvetica','normal');
-  movsEp.slice(0,80).forEach(m=>{
+  movsEp.forEach(m=>{
     if(y>270){doc.addPage();y=20;}
     const isRec=m.tipo==='receita';
     const isTrans=m.categoria==='Transferencia Interna';
