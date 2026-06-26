@@ -338,7 +338,9 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div class="nav-item" data-page="jogadores"><span class="nav-icon">👥</span>Jogadores</div>
       <div class="nav-item" data-page="sessoes"><span class="nav-icon">📅</span>Sessões</div>
       <div class="nav-item" data-page="treinos"><span class="nav-icon">📋</span>Treinos</div>
-      <div class="nav-item" data-page="metodologia"><span class="nav-icon">📚</span>Metodologia</div>
+      <div class="nav-item" data-page="biblioteca"><span class="nav-icon">📚</span>Biblioteca</div>
+      <div class="nav-item" data-page="planos-treino"><span class="nav-icon">📅</span>Planos</div>
+      <div class="nav-item" data-page="metodologia"><span class="nav-icon">🔬</span>Metodologia</div>
       <div class="nav-section">Análise</div>
       <div class="nav-item" data-page="ficha"><span class="nav-icon">📋</span>Ficha Individual</div>
       <div class="nav-item" data-page="avaliacao"><span class="nav-icon">⭐</span>Avaliação Técnica</div>
@@ -436,6 +438,60 @@ textarea.form-input{resize:vertical;min-height:70px}
         </div>
         <div class="grupo-tabs" id="treinos-gtabs"></div>
         <div id="treinos-list"></div>
+      </div>
+
+      <!-- ═══ BIBLIOTECA DE EXERCÍCIOS ═══ -->
+      <div id="page-biblioteca" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Biblioteca de Exercícios</div>
+            <div class="page-sub">Exercícios criados no editor FPP</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" class="form-input" id="bib-search" placeholder="Pesquisar…" oninput="renderBiblioteca()" style="width:180px">
+            <select class="form-input" id="bib-escalao" onchange="renderBiblioteca()" style="width:130px">
+              <option value="">Todos os escalões</option>
+              <option>Sub-9</option><option>Sub-11</option><option>Sub-13</option>
+              <option>Sub-15</option><option>Sub-17</option><option>Sénior</option>
+            </select>
+            <select class="form-input" id="bib-categoria" onchange="renderBiblioteca()" style="width:130px">
+              <option value="">Todas as categorias</option>
+              <option>Técnica Individual</option><option>Táctica Colectiva</option>
+              <option>Processo Ofensivo</option><option>Processo Defensivo</option>
+              <option>Transição Ataque-Defesa</option><option>Transição Defesa-Ataque</option>
+              <option>Guarda-Redes</option><option>Físico</option>
+            </select>
+            <a href="https://editor-exercicios.vercel.app" target="_blank" class="btn btn-primary">✏️ Abrir Editor</a>
+          </div>
+        </div>
+        <div id="bib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:4px"></div>
+        <div id="bib-empty" class="empty-state" style="display:none">
+          <div class="empty-state-icon">📋</div>
+          <div class="empty-state-text">Sem exercícios na biblioteca.<br>Cria o primeiro no Editor.</div>
+        </div>
+      </div>
+
+      <!-- ═══ PLANOS DE TREINO ═══ -->
+      <div id="page-planos-treino" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Planos de Treino</div>
+            <div class="page-sub">Planos criados no editor</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select class="form-input" id="planos-escalao" onchange="renderPlanosTreino()" style="width:140px">
+              <option value="">Todos os escalões</option>
+              <option>Sub-9</option><option>Sub-11</option><option>Sub-13</option>
+              <option>Sub-15</option><option>Sub-17</option><option>Sénior</option>
+            </select>
+            <a href="https://editor-exercicios.vercel.app" target="_blank" class="btn btn-primary">✏️ Abrir Editor</a>
+          </div>
+        </div>
+        <div id="planos-lista"></div>
+        <div id="planos-empty" class="empty-state" style="display:none">
+          <div class="empty-state-icon">📅</div>
+          <div class="empty-state-text">Sem planos de treino.<br>Cria o primeiro no Editor.</div>
+        </div>
       </div>
 
       <div id="page-metodologia" class="page">
@@ -1353,6 +1409,28 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<!-- MODAL: Ver Exercício -->
+<div id="modal-ver-ex" class="modal-bg">
+  <div class="modal" style="max-width:780px;width:95vw">
+    <div class="modal-header">
+      <span class="modal-title" id="ver-ex-title">Exercício</span>
+      <button class="modal-close" onclick="closeModal('modal-ver-ex')">✕</button>
+    </div>
+    <div id="ver-ex-body" style="display:flex;gap:16px;flex-wrap:wrap;max-height:72vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- MODAL: Ver Plano -->
+<div id="modal-ver-plano" class="modal-bg">
+  <div class="modal" style="max-width:800px;width:95vw">
+    <div class="modal-header">
+      <span class="modal-title" id="ver-plano-title">Plano de Treino</span>
+      <button class="modal-close" onclick="closeModal('modal-ver-plano')">✕</button>
+    </div>
+    <div id="ver-plano-body" style="max-height:75vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 </head>
 <body>
 
@@ -1793,7 +1871,7 @@ document.getElementById('sidebar').addEventListener('click',e=>{
   const el=e.target.closest('.nav-item[data-page]'); if(el)navGo(el);
 });
 function renderPage(p){
-  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();},inscricoes:renderInscricoes};
+  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();},inscricoes:renderInscricoes,biblioteca:renderBiblioteca,'planos-treino':renderPlanosTreino};
   if(map[p])map[p]();
 }
 function buildGrupoTabs(cid,pageKey){
@@ -7088,6 +7166,178 @@ function aplicarIdentidadeClube(){
 // ═══ INIT ═══
 document.getElementById('ses-data').value=new Date().toISOString().split('T')[0];
 document.getElementById('conv-data').value=new Date().toISOString().split('T')[0];
+// ═══════════════════════════════════════════════════════
+// BIBLIOTECA DE EXERCÍCIOS — leitura do Supabase
+// ═══════════════════════════════════════════════════════
+var _bibExercicios = [];
+
+async function loadBiblioteca(){
+  try{
+    var {data}=await sb.from('exercicios').select('*').order('criado_em',{ascending:false});
+    _bibExercicios=data||[];
+  }catch(e){_bibExercicios=[];}
+}
+
+function renderBiblioteca(){
+  loadBiblioteca().then(function(){
+    var q=(document.getElementById('bib-search')?.value||'').toLowerCase();
+    var esc=document.getElementById('bib-escalao')?.value||'';
+    var cat=document.getElementById('bib-categoria')?.value||'';
+    var list=_bibExercicios.filter(function(ex){
+      if(esc&&ex.escalao!==esc)return false;
+      if(cat&&ex.categoria!==cat)return false;
+      if(q&&!(ex.titulo||'').toLowerCase().includes(q)&&!(ex.descricao||'').toLowerCase().includes(q))return false;
+      return true;
+    });
+    var grid=document.getElementById('bib-grid');
+    var empty=document.getElementById('bib-empty');
+    if(!grid)return;
+    if(!list.length){grid.innerHTML='';if(empty)empty.style.display='block';return;}
+    if(empty)empty.style.display='none';
+    grid.innerHTML=list.map(function(ex){
+      var meta=[ex.escalao,ex.categoria,ex.duracao?ex.duracao+'min':''].filter(Boolean).join(' · ');
+      var img='';
+      if(ex.imagem_url) img='<img src="'+ex.imagem_url+'" style="width:100%;height:130px;object-fit:contain;background:#f3f4f6;border-radius:6px;display:block">';
+      else if(ex.svg_els) img='<div style="width:100%;height:130px;overflow:hidden;border-radius:6px;background:#2a2a2a;display:flex;align-items:center;justify-content:center"><div style="transform:scale(0.28);transform-origin:center;width:360%;color:white">'+buildFieldPreview(ex.svg_els)+'</div></div>';
+      else img='<div style="width:100%;height:130px;background:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px">Sem grafismo</div>';
+      return '<div class="card" style="padding:12px;cursor:pointer" onclick="verExBib(\''+ex.id+'\')">'+
+        img+
+        '<div style="font-size:13px;font-weight:600;color:var(--gray-900);margin:8px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(ex.titulo||'Sem título')+'</div>'+
+        '<div style="font-size:11px;color:var(--gray-500)">'+(meta||'—')+'</div>'+
+        '</div>';
+    }).join('');
+  });
+}
+
+function buildFieldPreview(svgEls){
+  return '<svg width="680" height="420" viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg">'
+    +'<rect width="680" height="420" fill="#4a7c4e"/>'
+    +'<rect x="60" y="50" width="560" height="320" fill="#5a8f5e" stroke="white" stroke-width="2"/>'
+    +'<line x1="340" y1="50" x2="340" y2="370" stroke="white" stroke-width="1.5"/>'
+    +'<circle cx="340" cy="210" r="50" fill="none" stroke="white" stroke-width="1.5"/>'
+    +svgEls+'</svg>';
+}
+
+function verExBib(id){
+  var ex=_bibExercicios.find(function(e){return e.id===id;});
+  if(!ex)return;
+  document.getElementById('ver-ex-title').textContent=ex.titulo||'Exercício';
+  var body=document.getElementById('ver-ex-body');
+  var grafHTML='';
+  if(ex.imagem_url&&ex.imagem_url!==''){
+    grafHTML='<div style="flex:1;min-width:280px;background:#111;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:180px">'
+      +'<img src="'+ex.imagem_url+'" style="max-width:100%;max-height:300px;object-fit:contain"></div>';
+  } else if(ex.svg_els){
+    grafHTML='<div style="flex:1;min-width:280px;border-radius:8px;overflow:hidden;border:1px solid var(--gray-200)">'+buildFieldPreview(ex.svg_els)+'</div>';
+  } else {
+    grafHTML='<div style="flex:1;min-width:280px;background:var(--gray-100);border-radius:8px;display:flex;align-items:center;justify-content:center;min-height:180px;color:var(--gray-400);font-size:13px">Sem grafismo</div>';
+  }
+  function row(l,v){if(!v||!v.toString().trim())return'';return'<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">'+l+'</div><div style="font-size:13px;color:var(--gray-900);white-space:pre-wrap">'+v+'</div></div>';}
+  var meta=[ex.escalao,ex.categoria].filter(Boolean).join(' · ');
+  var ficha='<div style="flex:1;min-width:240px;padding:4px 0">'
+    +(meta?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:10px">'+meta+(ex.duracao?' · '+ex.duracao+'min':'')+'</div>':'')
+    +row('Objetivo',ex.objetivo)
+    +row('Elementos de Conteúdo',ex.elementos)
+    +row('Pontos Chave',ex.componentes)
+    +row('Descrição',ex.descricao)
+    +row('Nº Jogadores',ex.jogadores)
+    +row('Material',ex.material)
+    +row('Variantes',ex.progressao)
+    +row('Notas',ex.notas)
+    +'</div>';
+  body.innerHTML=grafHTML+ficha;
+  openModal('modal-ver-ex');
+}
+
+// ═══════════════════════════════════════════════════════
+// PLANOS DE TREINO — leitura do Supabase
+// ═══════════════════════════════════════════════════════
+var _planosTreino = [];
+
+async function loadPlanosTreino(){
+  try{
+    var {data}=await sb.from('planos_treino').select('*').order('data',{ascending:false});
+    _planosTreino=data||[];
+  }catch(e){_planosTreino=[];}
+}
+
+function renderPlanosTreino(){
+  loadPlanosTreino().then(function(){
+    var esc=document.getElementById('planos-escalao')?.value||'';
+    var list=_planosTreino.filter(function(p){
+      if(esc&&p.escalao!==esc)return false;
+      return true;
+    });
+    var el=document.getElementById('planos-lista');
+    var empty=document.getElementById('planos-empty');
+    if(!el)return;
+    if(!list.length){el.innerHTML='';if(empty)empty.style.display='block';return;}
+    if(empty)empty.style.display='none';
+    el.innerHTML=list.map(function(p){
+      var exs=p.exercicios||[];
+      return '<div class="card" style="margin-bottom:10px;cursor:pointer" onclick="verPlanoBib(\''+p.id+'\')">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">'
+        +'<div>'
+        +'<div style="font-size:14px;font-weight:600;color:var(--gray-900)">'+(p.data||'—')+(p.hora?' · '+p.hora:'')+'</div>'
+        +'<div style="font-size:12px;color:var(--gray-500);margin-top:2px">'+(p.escalao||'')+(p.duracao?' · '+p.duracao+'min':'')+(p.local?' · '+p.local:'')+'</div>'
+        +(p.objetivos?'<div style="font-size:12px;color:var(--gray-600);margin-top:4px">'+p.objetivos+'</div>':'')
+        +'</div>'
+        +'<div style="display:flex;gap:4px;align-items:center">'
+        +(exs.length?'<span class="badge badge-info">'+exs.length+' exercícios</span>':'')
+        +(p.ficheiro_url?'<span class="badge badge-gray">📎 Ficheiro</span>':'')
+        +'</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  });
+}
+
+function verPlanoBib(id){
+  var p=_planosTreino.find(function(x){return x.id===id;});
+  if(!p)return;
+  document.getElementById('ver-plano-title').textContent='Plano · '+(p.data||'')+(p.escalao?' · '+p.escalao:'');
+  var body=document.getElementById('ver-plano-body');
+  if(p.ficheiro_url){
+    body.innerHTML='<div style="text-align:center;padding:16px"><img src="'+p.ficheiro_url+'" style="max-width:100%;border-radius:8px;max-height:500px;object-fit:contain"></div>';
+  } else {
+    var meta='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:12px;margin-bottom:14px;padding:10px;background:var(--gray-50);border-radius:8px">'
+      +'<div><strong>Data:</strong> '+(p.data||'—')+'</div>'
+      +'<div><strong>Hora:</strong> '+(p.hora||'—')+'</div>'
+      +'<div><strong>Escalão:</strong> '+(p.escalao||'—')+'</div>'
+      +'<div><strong>Duração:</strong> '+(p.duracao?p.duracao+'min':'—')+'</div>'
+      +'<div><strong>GR:</strong> '+(p.gr||'—')+'</div>'
+      +'<div><strong>J.C.:</strong> '+(p.jc||'—')+'</div>'
+      +'<div><strong>Local:</strong> '+(p.local||'—')+'</div>'
+      +'<div><strong>Período:</strong> '+(p.periodo||'—')+'</div>'
+      +'<div><strong>Microciclo:</strong> '+(p.microciclo||'—')+'</div>'
+      +'</div>'
+      +(p.objetivos?'<div style="font-size:13px;margin-bottom:12px"><strong>Objetivos:</strong> '+p.objetivos+'</div>':'');
+    var exs=(p.exercicios||[]).map(function(ex){
+      var img='';
+      if(ex.svg_data||ex.svg_els){
+        var els=ex.svg_els||'';
+        if(!els&&ex.svg_data){try{var dp=new DOMParser().parseFromString(ex.svg_data,'image/svg+xml');var ge=dp.querySelector('#g-els'),ga=dp.querySelector('#g-arr');els=(ge?ge.outerHTML:'')+(ga?ga.outerHTML:'');}catch(e){}}
+        if(els) img='<div style="width:160px;min-width:160px;overflow:hidden;position:relative;height:100px;background:#2a2a2a;border-radius:4px 0 0 4px"><div style="transform:scale(0.23);transform-origin:top left;width:435%;position:absolute">'+buildFieldPreview(els)+'</div></div>';
+      } else if(ex.imagem_url){
+        img='<img src="'+ex.imagem_url+'" style="width:160px;min-width:160px;height:100px;object-fit:contain;background:#111;border-radius:4px 0 0 4px">';
+      } else {
+        img='<div style="width:160px;min-width:160px;height:100px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--gray-400);border-radius:4px 0 0 4px">Sem grafismo</div>';
+      }
+      return '<div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden">'
+        +img
+        +'<div style="padding:10px;flex:1;background:#fff">'
+        +'<div style="font-size:11px;font-weight:700;color:var(--red)">'+ex.letra+'</div>'
+        +'<div style="font-size:13px;font-weight:600;margin-bottom:3px">'+(ex.titulo||ex.title||'—')+'</div>'
+        +(ex.objetivo?'<div style="font-size:11px;color:var(--gray-600);margin-bottom:2px"><strong>Objetivo:</strong> '+ex.objetivo+'</div>':'')
+        +(ex.descricao?'<div style="font-size:11px;color:var(--gray-700)">'+(ex.descricao||'').substring(0,200)+'</div>':'')
+        +(ex.tempo?'<div style="font-size:11px;color:var(--gray-500);margin-top:4px"><strong>Tempo:</strong> '+ex.tempo+'</div>':'')
+        +'</div></div>';
+    }).join('');
+    body.innerHTML=meta+(exs||'<div style="color:var(--gray-400);font-size:13px;padding:10px">Sem exercícios registados.</div>');
+  }
+  openModal('modal-ver-plano');
+}
+
 loadAllData().then(async ()=>{await loadCaixa();aplicarIdentidadeClube();console.log('ADB Campo — dados carregados do Supabase');});
 // ═══ PWA — Manifest dinâmico com dados do clube ═══
 function setupPWA(){
