@@ -6124,7 +6124,7 @@ async function gerarRelatorioIA(jid){
   const avalInfo=pre
     ?`Avaliação técnica pré-teste: média ${avg(pre.vals).toFixed(2)}/5.0. ${s?Object.entries(s.catAvgs).map(([k,v])=>k+': '+v.toFixed(2)).join(', '):''} ${pos?`Pós-teste: média ${avg(pos.vals).toFixed(2)}/5.0 (evolução ${(avg(pos.vals)-avg(pre.vals))>=0?'+':''}${(avg(pos.vals)-avg(pre.vals)).toFixed(2)}).`:'Pós-teste ainda não realizado.'} Forças: ${forcas}. Fraquezas: ${fraquezas}.`
     :'Sem avaliação técnica registada.';
-  const prompt=`És um treinador de hóquei em patins a escrever um relatório de avaliação sobre um jogador para os encarregados de educação.
+  const prompt=`És um treinador de hóquei em patins (NÃO futebol, NÃO outro desporto) a escrever um relatório de fim de época sobre um jogador, para os encarregados de educação. Usa exclusivamente vocabulário de hóquei em patins (ex: patinagem, drible, remate, baliza, ringue) e nunca termos de futebol (ex: golo de cabeça, relvado, bola).
 Escreve exatamente um parágrafo em português de Portugal (3 a 5 frases), com tom profissional mas acessível.
 Refere pontos fortes, áreas a melhorar e uma recomendação para a próxima época.
 Escreve apenas texto corrido, sem bullet points, sem títulos, sem introduções como "O jogador...".
@@ -6132,7 +6132,7 @@ Começa diretamente com o nome do jogador.
 
 Dados:
 - Nome: ${j.nome} | Escalão: ${j.sub} | Posição: ${j.pos}
-- Presenças: ${st.P}/${st.total} (${st.taxa}%) | Média do grupo: ${mediaG}%
+- Presenças: ${st.P}/${st.total} (${st.taxa}%) | Média do grupo: ${mediaG}% | Meta mínima exigida: ${META}%
 - Faltas c/ aviso: ${st.FCA} | Faltas s/ aviso: ${st.FSA} | Lesões: ${st.L}
 - ${avalInfo}`;
   try{
