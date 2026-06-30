@@ -1651,6 +1651,7 @@ async function loadAllData(){
       if(c.key==='clube_cor2') DB.config.clube_cor2=c.value;
       if(c.key==='clube_logo') DB.config.clube_logo=c.value;
       if(c.key==='grupos'){try{const g=JSON.parse(c.value);if(Array.isArray(g)&&g.length>0){GRUPOS.length=0;g.forEach(x=>GRUPOS.push(x));}}catch(e){}}
+      if(c.key==='grupo_subs'){try{window._grupoSubs=JSON.parse(c.value)||{};}catch(e){window._grupoSubs={};}}
       if(c.key==='profiles'){try{const ps=JSON.parse(c.value);if(Array.isArray(ps)&&ps.length>0){profiles.length=0;ps.forEach(p=>profiles.push({...p,licenca:p.licenca||'',cont:p.cont||''}));}}catch(e){}}
       if(c.key==='mensalidades_valores'){try{DB.mensalidades_valores=JSON.parse(c.value)||{};}catch(e){DB.mensalidades_valores={};}}
     });
@@ -5749,6 +5750,8 @@ function addGrupoDinamico(){
 function deleteGrupo(i){
   if(GRUPOS.length<=1){alert('Deve existir pelo menos 1 grupo');return;}
   if(!confirm('Apagar grupo "'+ GRUPOS[i]+'"?'))return;
+  const nome=GRUPOS[i];
+  if(window._grupoSubs&&window._grupoSubs[nome])delete window._grupoSubs[nome];
   GRUPOS.splice(i,1);
   saveGruposConfig();
   renderAdmin();
@@ -5756,6 +5759,7 @@ function deleteGrupo(i){
 }
 async function saveGruposConfig(){
   await sb.from('config').upsert({key:'grupos',value:JSON.stringify(GRUPOS)});
+  await sb.from('config').upsert({key:'grupo_subs',value:JSON.stringify(window._grupoSubs||{})});
 }
 function populateGrupoSelects(){
   ['ses-grupo','edit-ses-grupo'].forEach(id=>{
