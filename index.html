@@ -404,7 +404,7 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div class="page-header">
           <div><div class="page-title">💳 Mensalidades</div><div class="page-sub">Pagamentos de mensalidades por jogador e por mês</div></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" onclick="openModalValoresMensalidade()" style="background:#F0FDF4;color:#166534;border-color:#86EFAC">⚙️ Valores por Escalão</button>
+            <button class="btn" id="btn-mens-valores" onclick="openModalValoresMensalidade()" style="background:#F0FDF4;color:#166534;border-color:#86EFAC">⚙️ Valores por Escalão</button>
           </div>
         </div>
         <div class="grupo-tabs" id="mens-gtabs"></div>
@@ -6216,6 +6216,9 @@ Dados:
 }
 
 // ═══ MENSALIDADES ═══
+function isCoordenacao(){
+  return currentUser?.key==='coord' || currentUser?.role==='coord';
+}
 function mesAtualStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function valorMensalidade(sub){
   const epoca=DB.config.epoca||'2025/2026';
@@ -6227,6 +6230,8 @@ function pagamentoDoMes(jid,mes){
 }
 function renderMensalidades(){
   buildGrupoTabs('mens-gtabs','mensalidades');
+  const btnValores=document.getElementById('btn-mens-valores');
+  if(btnValores)btnValores.style.display=isCoordenacao()?'':'none';
   const mesInput=document.getElementById('mens-mes');
   if(mesInput&&!mesInput.value)mesInput.value=mesAtualStr();
   const mes=mesInput?mesInput.value:mesAtualStr();
@@ -6280,6 +6285,7 @@ async function guardarPagamentoMensalidade(){
   renderMensalidades();showSync();toast('✅ Pagamento registado!');
 }
 function openModalValoresMensalidade(){
+  if(!isCoordenacao()){toast('Apenas o Coordenador pode editar os valores.');return;}
   const epoca=DB.config.epoca||'2025/2026';
   document.getElementById('mens-valores-epoca').textContent=epoca;
   const subs=getAllSubs();
@@ -6288,6 +6294,7 @@ function openModalValoresMensalidade(){
   openModal('modal-valores-mensalidade');
 }
 async function guardarValoresMensalidade(){
+  if(!isCoordenacao()){toast('Sem permissão.');return;}
   const epoca=DB.config.epoca||'2025/2026';
   const subs=getAllSubs();
   const novosValores={...(DB.mensalidades_valores||{})};
