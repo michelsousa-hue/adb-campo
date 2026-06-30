@@ -6115,25 +6115,38 @@ async function gerarRelatorioIA(jid){
   const g=getGrupoForSub(j.sub);
   const sess=sessDoGrupo(g),st=statsJogador(j,sess);
   const mediaG=sess.length&&jogsDoGrupo(g).length?Math.round(jogsDoGrupo(g).reduce((a,x)=>a+statsJogador(x,sess).taxa,0)/jogsDoGrupo(g).length):0;
-  const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&d.nome===j.nome);
-  const pos=DB.avaliacoes.find(d=>d.tipo==='pos'&&d.nome===j.nome);
-  const preGestos2 = pre ? getGestosForAval(pre) : FICHA_LEGACY.gestos;
-  const forcas=pre?preGestos2.filter((_,i)=>pre.vals[i]>=4).map(c=>c.label).join(', ')||'Nenhuma':'N/A';
-  const fraquezas=pre?preGestos2.filter((_,i)=>pre.vals[i]<=2).map(c=>c.label).join(', ')||'Nenhuma':'N/A';
-  const s=pre?calcAvalStats(pre):null;
-  const avalInfo=pre
-    ?`Avaliação técnica pré-teste: média ${avg(pre.vals).toFixed(2)}/5.0. ${s?Object.entries(s.catAvgs).map(([k,v])=>k+': '+v.toFixed(2)).join(', '):''} ${pos?`Pós-teste: média ${avg(pos.vals).toFixed(2)}/5.0 (evolução ${(avg(pos.vals)-avg(pre.vals))>=0?'+':''}${(avg(pos.vals)-avg(pre.vals)).toFixed(2)}).`:'Pós-teste ainda não realizado.'} Forças: ${forcas}. Fraquezas: ${fraquezas}.`
-    :'Sem avaliação técnica registada.';
-  const prompt=`És um treinador de hóquei em patins (NÃO futebol, NÃO outro desporto) a escrever um relatório de fim de época sobre um jogador, para os encarregados de educação. Usa exclusivamente vocabulário de hóquei em patins (ex: patinagem, drible, remate, baliza, ringue) e nunca termos de futebol (ex: golo de cabeça, relvado, bola).
+  const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&(d.jogador_id===j.id||(d.jogador_id==null&&d.nome.trim()===j.nome.trim())));
+  const pos=DB.avaliacoes.find(d=>d.tipo==='pos'&&(d.jogador_id===j.id||(d.jogador_id==null&&d.nome.trim()===j.nome.trim())));
+  let avalInfo='Sem avaliação técnica registada.';
+  if(pre){
+    const preGestos=getGestosForAval(pre);
+    const cats=[...new Set(preGestos.map(c=>c.cat))];
+    const s=calcAvalStats(pre);
+    const sPos=pos?calcAvalStats(pos):null;
+    const porDominio=cats.map(cat=>{
+      const media=s.catAvgs[cat];
+      const tagLacuna=media<3?' [lacuna a trabalhar]':media>=4?' [ponto forte]':'';
+      const evolCat=sPos?` (pós-teste ${sPos.catAvgs[cat].toFixed(1)}/5.0)`:'';
+      return `${cat}: ${media.toFixed(1)}/5.0${evolCat}${tagLacuna}`;
+    }).join(' | ');
+    const mediaPre=avg(pre.vals), mediaPos=pos?avg(pos.vals):null;
+    avalInfo=`Avaliação técnica por domínio — ${porDominio}. Média geral pré-teste: ${mediaPre.toFixed(2)}/5.0${mediaPos!=null?`, pós-teste: ${mediaPos.toFixed(2)}/5.0 (evolução ${(mediaPos-mediaPre)>=0?'+':''}${(mediaPos-mediaPre).toFixed(2)})`:' (pós-teste ainda não realizado)'}.`;
+  }
+  const LESAO_MIN=3; // só refere lesão/doença se houver 3+ faltas por este motivo (período prolongado)
+  const lesaoInfo = st.L>=LESAO_MIN ? `\n- Faltas por lesão/doença: ${st.L} (período prolongado, condicionou a participação)` : '';
+  const abaixoMeta = st.taxa<META;
+  const prompt=`És um treinador de hóquei em patins (NÃO futebol, NÃO outro desporto) a escrever um relatório de fim de época sobre um jogador, para os encarregados de educação. Usa exclusivamente vocabulário de hóquei em patins (ex: patinagem, drible, remate, baliza, ringue) e nunca termos de futebol (ex: golo de cabeça, relvado, bola de futebol).
+Usa apenas o primeiro nome do jogador (nunca o nome completo, nunca a posição, nunca o escalão). Varia a forma de começar a frase de forma natural, não comeces sempre da mesma maneira.
 Escreve exatamente um parágrafo em português de Portugal (3 a 5 frases), com tom profissional mas acessível.
 Refere pontos fortes, áreas a melhorar e uma recomendação para a próxima época.
-Escreve apenas texto corrido, sem bullet points, sem títulos, sem introduções como "O jogador...".
-Começa diretamente com o nome do jogador.
+Escreve apenas texto corrido, sem bullet points, sem títulos, sem introduções genéricas como "O jogador...".
+Sobre a assiduidade: a meta mínima exigida pelo clube é ${META}%. ${abaixoMeta?`O jogador está ABAIXO desta meta (apenas ${st.taxa}%) — refere isto claramente como área a melhorar, independentemente da média do grupo.`:`O jogador cumpre a meta mínima de ${META}%.`} A média do grupo serve apenas como contexto secundário, nunca como referência principal de comparação.
+Só menciona lesão ou doença se essa informação aparecer explicitamente nos dados abaixo — se não aparecer, não fales no assunto.
 
 Dados:
-- Nome: ${j.nome} | Escalão: ${j.sub} | Posição: ${j.pos}
-- Presenças: ${st.P}/${st.total} (${st.taxa}%) | Média do grupo: ${mediaG}% | Meta mínima exigida: ${META}%
-- Faltas c/ aviso: ${st.FCA} | Faltas s/ aviso: ${st.FSA} | Lesões: ${st.L}
+- Primeiro nome: ${j.nome.split(' ')[0]}
+- Presenças: ${st.P}/${st.total} (${st.taxa}%) | Meta mínima exigida: ${META}% | Média do grupo: ${mediaG}%
+- Faltas c/ aviso: ${st.FCA} | Faltas s/ aviso: ${st.FSA}${lesaoInfo}
 - ${avalInfo}`;
   try{
     const res=await fetch('/api/relatorio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
