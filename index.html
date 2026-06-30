@@ -342,6 +342,7 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span>Dashboard</div>
       <div class="nav-item" data-page="presencas"><span class="nav-icon">✅</span>Presenças</div>
       <div class="nav-item" data-page="jogadores"><span class="nav-icon">👥</span>Jogadores</div>
+      <div class="nav-item" data-page="mensalidades"><span class="nav-icon">💳</span>Mensalidades</div>
       <div class="nav-item" data-page="sessoes"><span class="nav-icon">📅</span>Sessões</div>
       <div class="nav-item" data-page="treinos"><span class="nav-icon">📋</span>Treinos</div>
       <div class="nav-item" data-page="biblioteca"><span class="nav-icon">📚</span>Biblioteca</div>
@@ -397,6 +398,52 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div class="grupo-tabs" id="jog-gtabs"></div>
         <div class="card">
           <table class="tbl"><thead><tr><th>Nome</th><th>Nº</th><th>Sub</th><th>Posição</th><th>Presenças</th><th>Taxa</th><th>Avaliação</th><th></th></tr></thead><tbody id="jog-tbody"></tbody></table>
+        </div>
+      </div>
+      <div id="page-mensalidades" class="page">
+        <div class="page-header">
+          <div><div class="page-title">💳 Mensalidades</div><div class="page-sub">Pagamentos de mensalidades por jogador e por mês</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="openModalValoresMensalidade()" style="background:#F0FDF4;color:#166534;border-color:#86EFAC">⚙️ Valores por Escalão</button>
+          </div>
+        </div>
+        <div class="grupo-tabs" id="mens-gtabs"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+          <input type="month" class="form-input" id="mens-mes" style="max-width:160px" onchange="renderMensalidades()">
+          <span id="mens-resumo" style="font-size:12px;color:var(--gray-500)"></span>
+        </div>
+        <div class="card">
+          <table class="tbl"><thead><tr><th>Jogador</th><th>Sub</th><th>Valor</th><th>Estado</th><th>Método</th><th>Data Pagamento</th><th></th></tr></thead><tbody id="mens-tbody"></tbody></table>
+        </div>
+      </div>
+      <!-- ── Modal: Registar Pagamento ── -->
+      <div id="modal-mensalidade" class="modal-bg">
+        <div class="modal">
+          <div class="modal-header"><span class="modal-title">💳 Registar Pagamento</span><button class="modal-close" onclick="closeModal('modal-mensalidade')">✕</button></div>
+          <div id="mens-modal-jogador-label" style="font-weight:600;margin-bottom:10px"></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Valor (€)</label><input type="number" class="form-input" id="mens-pag-valor" min="0" step="0.5"></div>
+            <div class="form-group"><label class="form-label">Método</label>
+              <select class="form-input" id="mens-pag-metodo">
+                <option>Transferência</option>
+                <option>Numerário</option>
+                <option>MBWay</option>
+                <option>Cheque</option>
+                <option>Outro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label">Data de Pagamento</label><input type="date" class="form-input" id="mens-pag-data"></div>
+          <button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="guardarPagamentoMensalidade()">💾 Guardar Pagamento</button>
+        </div>
+      </div>
+      <!-- ── Modal: Valores por Escalão ── -->
+      <div id="modal-valores-mensalidade" class="modal-bg">
+        <div class="modal">
+          <div class="modal-header"><span class="modal-title">⚙️ Valores de Mensalidade por Escalão</span><button class="modal-close" onclick="closeModal('modal-valores-mensalidade')">✕</button></div>
+          <div class="page-sub" style="margin-bottom:10px">Época <strong id="mens-valores-epoca"></strong> · usa 0€ para escalão isento</div>
+          <div id="mens-valores-lista"></div>
+          <button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="guardarValoresMensalidade()">💾 Guardar Valores</button>
         </div>
       </div>
       <div id="page-sessoes" class="page">
@@ -1469,7 +1516,7 @@ const COMPS = [
 ];
 
 // ═══ STATE ═══
-let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], fichas_avaliacao:[], inscricoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'}, delegados:[], treinos:[] };
+let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], fichas_avaliacao:[], inscricoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'}, delegados:[], treinos:[], mensalidades:[], mensalidades_valores:{} };
 // Ficha legado (19 gestos originais — nunca apagar para preservar registos existentes)
 const FICHA_LEGACY_ID = 'iniciacao_legacy';
 const FICHA_LEGACY = {
@@ -1507,7 +1554,7 @@ let currentUser = null;
 let currentPin = '';
 let selectedProfile = null;
 let currentPage = 'dashboard';
-let currentGrupo = { dashboard:'Sub13+Sub15', presencas:'Sub13+Sub15', jogadores:'Sub13+Sub15', sessoes:'Sub13+Sub15', ficha:'Sub13+Sub15', relatorio:'Sub13+Sub15', convocatoria:'Sub13+Sub15' };
+let currentGrupo = { dashboard:'Sub13+Sub15', presencas:'Sub13+Sub15', jogadores:'Sub13+Sub15', sessoes:'Sub13+Sub15', ficha:'Sub13+Sub15', relatorio:'Sub13+Sub15', convocatoria:'Sub13+Sub15', mensalidades:'Sub13+Sub15' };
 let tempPres = {};
 let convSel = [];
 let pendTipo = null;
@@ -1542,7 +1589,7 @@ async function loadAllData(){
   _loadingData = true;
   showLoading(true);
   try {
-    const [jogsR, sessR, avalR, cfgR, jogosR, delegR, treinosR, metR, clinR, socR, fichasR, inscrR] = await Promise.all([
+    const [jogsR, sessR, avalR, cfgR, jogosR, delegR, treinosR, metR, clinR, socR, fichasR, inscrR, mensR] = await Promise.all([
       sb.from('jogadores').select('*').order('nome'),
       sb.from('sessoes').select('*').order('data',{ascending:false}),
       sb.from('avaliacoes').select('*'),
@@ -1555,7 +1602,9 @@ async function loadAllData(){
       sb.from('socios').select('*').order('nome'),
       sb.from('fichas_avaliacao').select('*').order('ordem',{ascending:true}),
       sb.from('inscricoes').select('*').order('criado_em',{ascending:false}),
+      sb.from('mensalidades').select('*'),
     ]);
+    DB.mensalidades = mensR?.data || [];
     // Deduplicate jogadores by id (fix for repeated players bug)
     const rawJogs = jogsR.data || [];
     const seenIds = new Set();
@@ -1603,6 +1652,7 @@ async function loadAllData(){
       if(c.key==='clube_logo') DB.config.clube_logo=c.value;
       if(c.key==='grupos'){try{const g=JSON.parse(c.value);if(Array.isArray(g)&&g.length>0){GRUPOS.length=0;g.forEach(x=>GRUPOS.push(x));}}catch(e){}}
       if(c.key==='profiles'){try{const ps=JSON.parse(c.value);if(Array.isArray(ps)&&ps.length>0){profiles.length=0;ps.forEach(p=>profiles.push({...p,licenca:p.licenca||'',cont:p.cont||''}));}}catch(e){}}
+      if(c.key==='mensalidades_valores'){try{DB.mensalidades_valores=JSON.parse(c.value)||{};}catch(e){DB.mensalidades_valores={};}}
     });
     // Re-renderizar lista de perfis no login com dados do Supabase
     renderLoginProfiles();
@@ -1877,7 +1927,7 @@ document.getElementById('sidebar').addEventListener('click',e=>{
   const el=e.target.closest('.nav-item[data-page]'); if(el)navGo(el);
 });
 function renderPage(p){
-  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();},inscricoes:renderInscricoes,biblioteca:renderBiblioteca,'planos-treino':renderPlanosTreino};
+  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();},inscricoes:renderInscricoes,biblioteca:renderBiblioteca,'planos-treino':renderPlanosTreino,mensalidades:renderMensalidades};
   if(map[p])map[p]();
 }
 function buildGrupoTabs(cid,pageKey){
@@ -2004,6 +2054,14 @@ function renderDashboard(){
     if(st.FSA>=3)msgs.push(`${st.FSA} FSA`);
     return`<div class="alert alert-danger">⚠️ <strong>${j.nome}</strong> — ${msgs.join(' · ')}</div>`;
   }).join('');}
+  // Alerta de mensalidades em atraso (a partir do dia 8 do mês corrente)
+  if(today.getDate()>=8){
+    const mesAtual=mesAtualStr();
+    const emAtraso=DB.jogadores.filter(j=>valorMensalidade(j.sub)>0 && !pagamentoDoMes(j.id,mesAtual));
+    if(emAtraso.length){
+      alertHtml+=`<div class="alert alert-danger">💳 <strong>${emAtraso.length}</strong> jogador(es) com a mensalidade de ${mesAtual} em atraso — <a href="#" onclick="document.querySelector('[data-page=\\'mensalidades\\']').click();return false" style="color:#991B1B;text-decoration:underline">ver Mensalidades</a></div>`;
+    }
+  }
   document.getElementById('dash-alertas').innerHTML=alertHtml;
 }
 
@@ -6155,6 +6213,131 @@ Dados:
     if(texto){textarea.value=texto;}else{textarea.value='Erro ao gerar relatório. Tenta novamente.';}
   }catch(e){textarea.value='Erro de ligação. Tenta novamente.';}
   btn.disabled=false;btn.textContent='✨ Gerar com IA';
+}
+
+// ═══ MENSALIDADES ═══
+function mesAtualStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function valorMensalidade(sub){
+  const epoca=DB.config.epoca||'2025/2026';
+  const cfg=(DB.mensalidades_valores&&DB.mensalidades_valores[epoca])||{};
+  return cfg[sub]!==undefined?Number(cfg[sub]):0;
+}
+function pagamentoDoMes(jid,mes){
+  return DB.mensalidades.find(m=>m.jogador_id===jid&&m.mes===mes);
+}
+function renderMensalidades(){
+  buildGrupoTabs('mens-gtabs','mensalidades');
+  const mesInput=document.getElementById('mens-mes');
+  if(mesInput&&!mesInput.value)mesInput.value=mesAtualStr();
+  const mes=mesInput?mesInput.value:mesAtualStr();
+  const g=currentGrupo.mensalidades,jogs=jogsDoGrupo(g);
+  const ehMesAtual=mes===mesAtualStr();
+  const diaAtual=new Date().getDate();
+  let pagos=0,emDivida=0,isentos=0;
+  const rows=jogs.map(j=>{
+    const valorEsperado=valorMensalidade(j.sub);
+    if(valorEsperado<=0){
+      isentos++;
+      return `<tr><td>${j.nome}</td><td>${j.sub}</td><td>Isento</td><td><span class="badge" style="background:#F3F4F6;color:#6B7280">Isento</span></td><td>—</td><td>—</td><td></td></tr>`;
+    }
+    const pag=pagamentoDoMes(j.id,mes);
+    let estadoHtml,acoesHtml;
+    if(pag){
+      pagos++;
+      estadoHtml='<span class="badge badge-ok">✓ Pago</span>';
+      acoesHtml=`<button class="btn btn-sm" onclick="gerarReciboMensalidade('${pag.id}')" style="color:#166534">📄 Recibo</button>`;
+    } else {
+      const atrasado=ehMesAtual?diaAtual>=8:true;
+      emDivida++;
+      estadoHtml=atrasado?'<span class="badge badge-danger">⚠ Em dívida</span>':'<span class="badge badge-warn">Por pagar</span>';
+      acoesHtml=`<button class="btn btn-sm btn-primary" onclick="abrirModalPagamento('${j.id}','${mes}')">💳 Registar</button>`;
+    }
+    return `<tr><td>${j.nome}</td><td>${j.sub}</td><td>${valorEsperado}€</td><td>${estadoHtml}</td><td>${pag?(pag.metodo||'—'):'—'}</td><td>${pag?fmtDate(pag.data_pagamento):'—'}</td><td>${acoesHtml}</td></tr>`;
+  }).join('');
+  document.getElementById('mens-tbody').innerHTML=rows||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400)">Sem jogadores</td></tr>';
+  document.getElementById('mens-resumo').textContent=`${pagos} pagos · ${emDivida} em dívida · ${isentos} isentos`;
+}
+let _mensPagJid=null,_mensPagMes=null;
+function abrirModalPagamento(jid,mes){
+  const j=DB.jogadores.find(x=>x.id===jid);if(!j)return;
+  _mensPagJid=jid;_mensPagMes=mes;
+  document.getElementById('mens-modal-jogador-label').textContent=`${j.nome} — ${mes}`;
+  document.getElementById('mens-pag-valor').value=valorMensalidade(j.sub);
+  document.getElementById('mens-pag-metodo').value='Transferência';
+  document.getElementById('mens-pag-data').value=new Date().toISOString().split('T')[0];
+  openModal('modal-mensalidade');
+}
+async function guardarPagamentoMensalidade(){
+  if(!_mensPagJid||!_mensPagMes)return;
+  const valor=Number(document.getElementById('mens-pag-valor').value)||0;
+  const metodo=document.getElementById('mens-pag-metodo').value;
+  const data_pagamento=document.getElementById('mens-pag-data').value;
+  const record={id:_mensPagJid+'_'+_mensPagMes,jogador_id:_mensPagJid,mes:_mensPagMes,epoca:DB.config.epoca||'2025/2026',valor,metodo,data_pagamento,criado_em:new Date().toISOString()};
+  await sb.from('mensalidades').upsert(record);
+  const idx=DB.mensalidades.findIndex(m=>m.id===record.id);
+  if(idx>=0)DB.mensalidades[idx]=record;else DB.mensalidades.push(record);
+  closeModal('modal-mensalidade');
+  renderMensalidades();showSync();toast('✅ Pagamento registado!');
+}
+function openModalValoresMensalidade(){
+  const epoca=DB.config.epoca||'2025/2026';
+  document.getElementById('mens-valores-epoca').textContent=epoca;
+  const subs=getAllSubs();
+  const cfg=(DB.mensalidades_valores&&DB.mensalidades_valores[epoca])||{};
+  document.getElementById('mens-valores-lista').innerHTML=subs.map(s=>`<div class="form-group" style="display:flex;align-items:center;gap:10px"><label class="form-label" style="min-width:90px;margin:0">${s}</label><input type="number" class="form-input" min="0" step="0.5" id="mensval-${s}" value="${cfg[s]!==undefined?cfg[s]:0}"></div>`).join('');
+  openModal('modal-valores-mensalidade');
+}
+async function guardarValoresMensalidade(){
+  const epoca=DB.config.epoca||'2025/2026';
+  const subs=getAllSubs();
+  const novosValores={...(DB.mensalidades_valores||{})};
+  novosValores[epoca]={};
+  subs.forEach(s=>{const el=document.getElementById('mensval-'+s);novosValores[epoca][s]=Number(el?.value)||0;});
+  DB.mensalidades_valores=novosValores;
+  await sb.from('config').upsert({key:'mensalidades_valores',value:JSON.stringify(novosValores)});
+  closeModal('modal-valores-mensalidade');
+  renderMensalidades();showSync();toast('✅ Valores guardados!');
+}
+async function gerarReciboMensalidade(pagId){
+  const pag=DB.mensalidades.find(m=>m.id===pagId);if(!pag){toast('Pagamento não encontrado');return;}
+  const j=DB.jogadores.find(x=>x.id===pag.jogador_id);if(!j){toast('Jogador não encontrado');return;}
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210,margin=16,cW=W-margin*2;
+  const RED=[139,26,26],GRAY=[107,114,128],BLK=[17,24,39],WHITE=[255,255,255],LGRAY=[243,244,246];
+  const clubeNome=DB.config?.clube_nome||'ADB Campo';
+  const logoCircular=await makeCircularLogo(LOGO_B64,600).catch(()=>null);
+  doc.setFillColor(...RED);doc.rect(0,0,W,26,'F');
+  try{if(logoCircular)doc.addImage(logoCircular,'PNG',margin,3,20,20);else doc.addImage(LOGO_B64,'JPEG',margin,3,20,20);}catch(e){}
+  doc.setTextColor(...WHITE);doc.setFontSize(15);doc.setFont('helvetica','bold');
+  doc.text(clubeNome+' — Comprovativo de Pagamento',margin+24,11);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text('Gerado em '+new Date().toLocaleDateString('pt-PT'),margin+24,18);
+  let y=40;
+  doc.setFillColor(...LGRAY);doc.rect(margin,y,cW,7,'F');
+  doc.setTextColor(...BLK);doc.setFontSize(9);doc.setFont('helvetica','bold');
+  doc.text('DETALHES DO PAGAMENTO',margin+2,y+5);y+=14;
+  doc.setFont('helvetica','normal');doc.setFontSize(11);
+  const linhas=[
+    ['Jogador',j.nome],
+    ['Escalão',j.sub||'—'],
+    ['Mês/Período',pag.mes],
+    ['Época',pag.epoca||DB.config.epoca||'—'],
+    ['Valor pago',(pag.valor||0)+'€'],
+    ['Método',pag.metodo||'—'],
+    ['Data de pagamento',pag.data_pagamento?fmtDate(pag.data_pagamento):'—'],
+  ];
+  linhas.forEach(([label,val])=>{
+    doc.setFont('helvetica','bold');doc.setTextColor(...BLK);doc.text(label+':',margin,y);
+    doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);doc.text(String(val),margin+55,y);
+    y+=8;
+  });
+  y+=10;
+  doc.setDrawColor(...RED);doc.setLineWidth(0.5);doc.line(margin,y,W-margin,y);y+=6;
+  doc.setFontSize(8);doc.setTextColor(...GRAY);
+  doc.text('Este documento serve como comprovativo simples de pagamento, sem valor fiscal.',margin,y);
+  doc.save('Recibo_'+j.nome.replace(/ /g,'_')+'_'+pag.mes+'.pdf');
+  toast('📄 Recibo gerado!');
 }
 
 // ═══ FLUXO DE CAIXA ═══
