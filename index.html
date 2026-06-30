@@ -6288,22 +6288,25 @@ async function guardarPagamentoMensalidade(){
   closeModal('modal-mensalidade');
   renderMensalidades();showSync();toast('✅ Pagamento registado!');
 }
+function getEscaloesAtivos(){
+  return [...new Set((DB.jogadores||[]).map(j=>j.sub).filter(Boolean))].sort();
+}
 function openModalValoresMensalidade(){
   if(!isCoordenacao()){toast('Apenas o Coordenador pode editar os valores.');return;}
   const epoca=DB.config.epoca||'2025/2026';
   document.getElementById('mens-valores-epoca').textContent=epoca;
-  const subs=getAllSubs();
+  const subs=getEscaloesAtivos();
   const cfg=(DB.mensalidades_valores&&DB.mensalidades_valores[epoca])||{};
-  document.getElementById('mens-valores-lista').innerHTML=subs.map(s=>`<div class="form-group" style="display:flex;align-items:center;gap:10px"><label class="form-label" style="min-width:90px;margin:0">${s}</label><input type="number" class="form-input" min="0" step="0.5" id="mensval-${s}" value="${cfg[s]!==undefined?cfg[s]:0}"></div>`).join('');
+  document.getElementById('mens-valores-lista').innerHTML=subs.length?subs.map(s=>`<div class="form-group" style="display:flex;align-items:center;gap:10px"><label class="form-label" style="min-width:90px;margin:0">${s}</label><input type="number" class="form-input" min="0" step="0.5" id="mensval-${s}" value="${cfg[s]!==undefined?cfg[s]:0}"></div>`).join(''):'<div style="font-size:12px;color:var(--gray-400)">Sem jogadores registados ainda.</div>';
   openModal('modal-valores-mensalidade');
 }
 async function guardarValoresMensalidade(){
   if(!isCoordenacao()){toast('Sem permissão.');return;}
   const epoca=DB.config.epoca||'2025/2026';
-  const subs=getAllSubs();
+  const subs=getEscaloesAtivos();
   const novosValores={...(DB.mensalidades_valores||{})};
-  novosValores[epoca]={};
-  subs.forEach(s=>{const el=document.getElementById('mensval-'+s);novosValores[epoca][s]=Number(el?.value)||0;});
+  novosValores[epoca]={...(novosValores[epoca]||{})};
+  subs.forEach(s=>{const el=document.getElementById('mensval-'+s);if(el)novosValores[epoca][s]=Number(el.value)||0;});
   DB.mensalidades_valores=novosValores;
   await sb.from('config').upsert({key:'mensalidades_valores',value:JSON.stringify(novosValores)});
   closeModal('modal-valores-mensalidade');
