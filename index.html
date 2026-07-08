@@ -2595,6 +2595,7 @@ function renderAvalRegisto(){
           <select class="form-input" id="reg-tipo-sel" onchange="renderRegForm()" style="max-width:160px">
             <option value="pre">Pré-teste</option>
             <option value="pos">Pós-teste</option>
+            <option value="final">Final de Época</option>
           </select>
         </div>
       </div>
@@ -2636,11 +2637,13 @@ function renderRegForm(){
   const fichaId=fichaAtiva.id;
   const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&d.nome===nome&&(d.ficha_id||FICHA_LEGACY_ID)===fichaId);
   const pos=DB.avaliacoes.find(d=>d.tipo==='pos'&&d.nome===nome&&(d.ficha_id||FICHA_LEGACY_ID)===fichaId);
-  const existing=tipo==='pre'?pre:pos;
-  const reference=tipo==='pos'?pre:null;
+  const fin=DB.avaliacoes.find(d=>d.tipo==='final'&&d.nome===nome&&(d.ficha_id||FICHA_LEGACY_ID)===fichaId);
+  const existing=tipo==='pre'?pre:tipo==='pos'?pos:fin;
+  // referência: pós-teste para o final, pré-teste para o pós
+  const reference=tipo==='pos'?pre:tipo==='final'?pos||pre:null;
   const vals=existing?[...existing.vals]:(reference?[...reference.vals]:new Array(gestos.length).fill(3));
   const cats=[...new Set(gestos.map(c=>c.cat))];
-  const tipoLabel=tipo==='pre'?'Pré-teste':'Pós-teste';
+  const tipoLabel=tipo==='pre'?'Pré-teste':tipo==='pos'?'Pós-teste':'Final de Época';
   div.innerHTML=cats.map(cat=>{
     const comps=gestos.filter(c=>c.cat===cat);
     return`<div style="margin-bottom:16px">
@@ -2650,7 +2653,7 @@ function renderRegForm(){
         const v=vals[i]||3;
         const refVal=reference?reference.vals[i]:null;
         return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-100)">
-          <div style="flex:1;font-size:12px">${c.label}${refVal?`<span style="font-size:10px;color:var(--gray-400);margin-left:6px">pré: ${refVal}</span>`:''}</div>
+          <div style="flex:1;font-size:12px">${c.label}${refVal?`<span style="font-size:10px;color:var(--gray-400);margin-left:6px">${tipo==='final'?'pós':'pré'}: ${refVal}</span>`:''}</div>
           <div style="display:flex;gap:4px">
             ${[1,2,3,4,5].map(n=>`<button onclick="setRegVal(${i},${n})" id="reg-btn-${i}-${n}" style="width:28px;height:28px;border-radius:6px;border:1px solid ${v===n?'transparent':'var(--gray-200)'};background:${v===n?(n>=4?'#1D9E75':n>=3?'#EF9F27':'#DC2626'):'var(--gray-50)'};color:${v===n?'white':'var(--gray-600)'};font-size:12px;font-weight:600;cursor:pointer">${n}</button>`).join('')}
           </div>
@@ -2684,25 +2687,51 @@ async function saveAvaliacao(nome,tipo){
   if(!window._regVals||window._regVals.length!==nGestos){alert('Preenche todas as competências!');return;}
   const jog=DB.jogadores.find(j=>j.nome===nome);if(!jog)return;
   showLoading(true);
-  const existing=DB.avaliacoes.find(d=>d.tipo===tipo&&d.nome===nome&&(d.ficha_id||FICHA_LEGACY_ID)===fichaId);
-  const record={nome,tipo,ficha_id:fichaId,epoca:DB.config.epoca||'2025/2026',data:new Date().toISOString().split('T')[0],vals:[...window._regVals]};
-  if(existing){
-    await sb.from('avaliacoes').update(record).eq('id',existing.id);
-    const idx=DB.avaliacoes.indexOf(existing);
-    DB.avaliacoes[idx]={...existing,...record};
-  } else {
-    record.id=uid();
-    await sb.from('avaliacoes').insert(record);
-    DB.avaliacoes.push(record);
+
+  // Procurar registo existente de forma mais robusta:
+  // 1) pelo id da ficha exato, ou
+  // 2) pelo FICHA_LEGACY_ID se ficha_id for nulo
+  const existing = DB.avaliacoes.find(d =>
+    d.tipo===tipo && d.nome===nome &&
+    ((d.ficha_id||FICHA_LEGACY_ID)===fichaId || (!d.ficha_id && fichaId===FICHA_LEGACY_ID))
+  );
+
+  const record={
+    nome, tipo,
+    ficha_id: fichaId,
+    epoca: DB.config.epoca||'2025/2026',
+    data: new Date().toISOString().split('T')[0],
+    vals: [...window._regVals]
+  };
+
+  try {
+    if(existing){
+      // UPDATE — usar o id do registo existente
+      const {error} = await sb.from('avaliacoes').update(record).eq('id', existing.id);
+      if(error) throw error;
+      // Atualizar em memória pelo id (mais robusto que indexOf)
+      const idx = DB.avaliacoes.findIndex(d => d.id === existing.id);
+      if(idx >= 0) DB.avaliacoes[idx] = {...existing, ...record};
+    } else {
+      // INSERT — novo registo
+      record.id = uid();
+      const {error} = await sb.from('avaliacoes').insert(record);
+      if(error) throw error;
+      DB.avaliacoes.push(record);
+    }
+    showLoading(false);
+    const label = tipo==='pre'?'Pré-teste':tipo==='pos'?'Pós-teste':'Final de Época';
+    toast('✅ '+label+' do '+nome.split(' ')[0]+' guardado!');
+    renderAvalRegisto();
+    renderRegForm();
+  } catch(err) {
+    showLoading(false);
+    console.error('Erro ao guardar avaliação:', err);
+    toast('❌ Erro ao guardar: '+(err.message||'verifica a ligação'));
   }
-  showLoading(false);
-  const label=tipo==='pre'?'Pré-teste':'Pós-teste';
-  toast('✅ '+label+' do '+nome.split(' ')[0]+' guardado!');
-  renderAvalRegisto();
-  renderRegForm();
 }
 async function deleteAval(nome,tipo){
-  const label=tipo==='pre'?'Pré-teste':'Pós-teste';
+  const label=tipo==='pre'?'Pré-teste':tipo==='pos'?'Pós-teste':'Final de Época';
   if(!confirm('Apagar '+label+' de '+nome+'?'))return;
   const fichaId=fichaAtiva.id;
   const existing=DB.avaliacoes.find(d=>d.tipo===tipo&&d.nome===nome&&(d.ficha_id||FICHA_LEGACY_ID)===fichaId);
@@ -2917,7 +2946,30 @@ function renderAvalGrupo(){
 }
 function renderAvalEvolucao(){
   const pre=getAvalData('pre',fichaAtiva.id),pos=getAvalData('pos',fichaAtiva.id);
-  document.getElementById('aval-evolucao').innerHTML=`<div class="card">${pos.length===0?'<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Pós-teste ainda não realizado.<br>Quando fizeres a segunda avaliação, a evolução aparece aqui.</div></div>':''}</div><div class="card"><div class="card-title">📈 Pré vs Pós-teste — ${fichaAtiva.nome}</div><table class="tbl"><thead><tr><th>Jogador</th><th>Pré-teste</th><th>Pós-teste</th><th>Evolução</th></tr></thead><tbody>${pre.map(d=>{const p2=pos.find(x=>x.nome===d.nome),evo=p2?(p2.media-d.media).toFixed(2):null;return`<tr><td>${d.nome}</td><td><strong style="color:${valColor(d.media)}">${d.media.toFixed(2)}</strong></td><td>${p2?`<strong style="color:${valColor(p2.media)}">${p2.media.toFixed(2)}</strong>`:'<span class="badge badge-gray">Pendente</span>'}</td><td>${evo?`<span style="color:${parseFloat(evo)>=0?'#059669':'#DC2626'};font-weight:600">${parseFloat(evo)>=0?'+':''}${evo}</span>`:'—'}</td></tr>`;}).join('')}</tbody></table></div>`;
+  const finAvals=DB.avaliacoes.filter(d=>d.tipo==='final'&&(d.ficha_id||FICHA_LEGACY_ID)===fichaAtiva.id).map(d=>({...d,media:d.vals.reduce((a,b)=>a+b,0)/d.vals.length}));
+  function evoTag(val,cor){return val?('<span style="font-size:10px;color:'+cor+';margin-left:4px;font-weight:600">'+(parseFloat(val)>=0?'+':'')+val+'</span>'):''; }
+  function evoTot(val){if(!val)return'—';const c=parseFloat(val)>=0?'#059669':'#DC2626';return'<span style="color:'+c+';font-weight:700">'+(parseFloat(val)>=0?'+':'')+val+'</span>';}
+  const rows=pre.map(function(d){
+    const p2=pos.find(function(x){return x.nome===d.nome;});
+    const pf=finAvals.find(function(x){return x.nome===d.nome;});
+    const evoPos=p2?(p2.media-d.media).toFixed(2):null;
+    const evoFin=pf?(pf.media-d.media).toFixed(2):null;
+    const evoCor=evoPos&&parseFloat(evoPos)>=0?'#059669':'#DC2626';
+    const tdPre='<td><strong style="color:'+valColor(d.media)+'">'+d.media.toFixed(2)+'</strong></td>';
+    const tdPos=p2?'<td><strong style="color:'+valColor(p2.media)+'">'+p2.media.toFixed(2)+'</strong>'+evoTag(evoPos,evoCor)+'</td>':'<td><span class="badge badge-gray">—</span></td>';
+    const tdFin=pf?'<td><strong style="color:'+valColor(pf.media)+'">'+pf.media.toFixed(2)+'</strong>'+evoTag(evoFin,parseFloat(evoFin||0)>=0?'#059669':'#DC2626')+'</td>':'<td><span class="badge badge-gray">—</span></td>';
+    const tdEvo='<td>'+evoTot(evoFin||evoPos)+'</td>';
+    return '<tr><td>'+d.nome+'</td>'+tdPre+tdPos+tdFin+tdEvo+'</tr>';
+  }).join('');
+  const emptyMsg=pos.length===0?'<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Pós-teste ainda não realizado.<br>Quando fizeres a segunda avaliação, a evolução aparece aqui.</div></div>':'';
+  document.getElementById('aval-evolucao').innerHTML=
+    '<div class="card">'+emptyMsg+'</div>'+
+    '<div class="card">'+
+      '<div class="card-title">📈 Evolução — '+fichaAtiva.nome+'</div>'+
+      '<table class="tbl"><thead><tr>'+
+        '<th>Jogador</th><th>Pré-teste</th><th>Pós-teste</th><th>Final Época</th><th>Evolução Total</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table>'+
+    '</div>';
 }
 
 // ═══ RELATÓRIO ═══
@@ -6039,8 +6091,23 @@ async function gerarPDFJogador(){
   }
 
   // ── Avaliacao tecnica ──
-  const pre=DB.avaliacoes.find(d=>d.tipo==='pre'&&(d.jogador_id===j.id||(d.jogador_id==null&&d.nome.trim()===j.nome.trim())));
-  const pos=DB.avaliacoes.find(d=>d.tipo==='pos'&&(d.jogador_id===j.id||(d.jogador_id==null&&d.nome.trim()===j.nome.trim())));
+  // Procurar pela ficha ativa primeiro, depois fallback para qualquer ficha
+  function findAval(tipo){
+    const fichaId = fichaAtiva ? fichaAtiva.id : FICHA_LEGACY_ID;
+    // 1) tentar encontrar com ficha ativa
+    let a = DB.avaliacoes.find(d=>d.tipo===tipo &&
+      (d.jogador_id===j.id||(d.jogador_id==null&&d.nome.trim()===j.nome.trim())) &&
+      (d.ficha_id||FICHA_LEGACY_ID)===fichaId
+    );
+    // 2) fallback — qualquer ficha
+    if(!a) a = DB.avaliacoes.find(d=>d.tipo===tipo &&
+      (d.jogador_id===j.id||(d.jogador_id==null&&d.nome.trim()===j.nome.trim()))
+    );
+    return a;
+  }
+  const pre = findAval('pre');
+  const pos = findAval('pos');
+  const fin = findAval('final');
   if(pre){
     // gestos do pré-teste (compatível com legacy e novas fichas)
     const preGestos = getGestosForAval(pre);
@@ -6055,10 +6122,12 @@ async function gerarPDFJogador(){
       doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
       doc.text(cat,margin+ci*colW,y);
     });
-    if(pos){
-      doc.setFontSize(6);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-      doc.text('Pre / Pos / Evo',W-margin,y,{align:'right'});
-    }
+    doc.setFontSize(6);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+    let headerTxt = 'Pre';
+    if(pos) headerTxt += ' / Pos';
+    if(fin) headerTxt += ' / Final';
+    headerTxt += ' / Evo';
+    doc.text(headerTxt,W-margin,y,{align:'right'});
     y+=4;
 
     const maxRows=Math.max(...cats.map(cat=>preGestos.filter(c=>c.cat===cat).length));
@@ -6076,12 +6145,23 @@ async function gerarPDFJogador(){
         doc.setFillColor(...dc);doc.circle(cx+colW-14,y+row*6+2.5,2.5,'F');
         doc.setFontSize(7);doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');
         doc.text(''+preV,cx+colW-14,y+row*6+3.5,{align:'center'});
-        if(posV){
+        if(posV!==null&&posV!==undefined){
           const dc2=posV>=4?GREEN:posV>=3?ORANGE:RED;
-          doc.setFillColor(...dc2);doc.circle(cx+colW-7,y+row*6+2.5,2.5,'F');
+          doc.setFillColor(...dc2);doc.circle(cx+colW-14,y+row*6+2.5,2.5,'F');
           doc.setFontSize(7);doc.setTextColor(255,255,255);
-          doc.text(''+posV,cx+colW-7,y+row*6+3.5,{align:'center'});
-          const evo=posV-preV;
+          doc.text(''+posV,cx+colW-14,y+row*6+3.5,{align:'center'});
+        }
+        const finV=fin?fin.vals[i]:null;
+        if(finV!==null&&finV!==undefined){
+          const dc3=finV>=4?GREEN:finV>=3?ORANGE:RED;
+          doc.setFillColor(...dc3);doc.circle(cx+colW-7,y+row*6+2.5,2.5,'F');
+          doc.setFontSize(7);doc.setTextColor(255,255,255);
+          doc.text(''+finV,cx+colW-7,y+row*6+3.5,{align:'center'});
+        }
+        // Evolução: compara último valor disponível com pré
+        const lastV=finV!==null&&finV!==undefined?finV:(posV!==null&&posV!==undefined?posV:null);
+        if(lastV!==null){
+          const evo=lastV-preV;
           doc.setFontSize(6);doc.setTextColor(evo>0?22:evo<0?180:107,evo>0?163:evo<0?20:114,evo>0?74:evo<0?20:128);
           doc.text(evo>0?'+'+evo:evo<0?''+evo:'=',cx+colW-1,y+row*6+3.5,{align:'center'});
         }
@@ -6092,11 +6172,19 @@ async function gerarPDFJogador(){
     // Legend
     checkY(8);
     doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-    doc.setFillColor(...RED);doc.circle(W-margin-30,y-1,2,'F');
-    doc.setTextColor(0,0,0);doc.text('Pre-teste',W-margin-27,y);
+    // Círculo pré (vermelho) — posição dinâmica
+    let legX = W-margin-48;
+    doc.setFillColor(...RED);doc.circle(legX,y-1,2,'F');
+    doc.setTextColor(0,0,0);doc.text('Pre',legX+3,y);
     if(pos){
-      doc.setFillColor(29,100,200);doc.circle(W-margin-14,y-1,2,'F');
-      doc.text('Pos-teste',W-margin-11,y);
+      legX+=16;
+      doc.setFillColor(...ORANGE);doc.circle(legX,y-1,2,'F');
+      doc.text('Pos',legX+3,y);
+    }
+    if(fin){
+      legX+=16;
+      doc.setFillColor(...GREEN);doc.circle(legX,y-1,2,'F');
+      doc.text('Final',legX+3,y);
     }
     y+=6;
 
@@ -6106,8 +6194,11 @@ async function gerarPDFJogador(){
     doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(0,0,0);
     doc.text('Analise SWOT',margin,y);y+=5;
 
-    const forcas=preGestos.filter((_,i)=>pre.vals[i]>=4);
-    const fraquezas=preGestos.filter((_,i)=>pre.vals[i]<=2);
+    // SWOT usa os valores mais recentes disponíveis
+    const swotVals = fin ? fin.vals : pos ? pos.vals : pre.vals;
+    const swotLabel = fin ? 'Final de Época' : pos ? 'Pós-teste' : 'Pré-teste';
+    const forcas=preGestos.filter((_,i)=>swotVals[i]>=4);
+    const fraquezas=preGestos.filter((_,i)=>swotVals[i]<=2);
     const swotW=(cW-4)/2;
     const swotHf=Math.max(forcas.length,1)*4+14;
     const swotHw=Math.max(fraquezas.length,1)*4+14;
