@@ -2569,6 +2569,7 @@ function renderAvalRegisto(){
   const jogs=DB.jogadores.filter(j=>subsPermitidos.includes(j.sub)).sort((a,b)=>a.nome.localeCompare(b.nome));
   const pre=DB.avaliacoes.filter(d=>d.tipo==='pre'&&(d.ficha_id||FICHA_LEGACY_ID)===fichaAtiva.id);
   const pos=DB.avaliacoes.filter(d=>d.tipo==='pos'&&(d.ficha_id||FICHA_LEGACY_ID)===fichaAtiva.id);
+  const fin=DB.avaliacoes.filter(d=>d.tipo==='final'&&(d.ficha_id||FICHA_LEGACY_ID)===fichaAtiva.id);
   const div=document.getElementById('aval-registo');
   div.innerHTML=`
     <div class="alert alert-info" style="margin-bottom:12px;padding:8px 12px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;font-size:12px;color:#1E40AF">
@@ -2585,7 +2586,8 @@ function renderAvalRegisto(){
             ${jogs.map(j=>{
               const hasPre=pre.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
               const hasPos=pos.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
-              const badge=hasPos?'✅':hasPre?'📋':'—';
+              const hasFin=fin.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
+              const badge=hasFin?'🏆':hasPos?'✅':hasPre?'📋':'—';
               return`<option value="${j.nome}">${badge} ${j.nome} (${j.sub})</option>`;
             }).join('')}
           </select>
@@ -2603,13 +2605,14 @@ function renderAvalRegisto(){
     </div>
     <div class="card" style="margin-top:12px">
       <div class="card-title">📊 Estado das avaliações — ${fichaAtiva.nome}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">
         ${jogs.map(j=>{
           const hasPre=pre.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
           const hasPos=pos.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
-          const color=hasPos?'#F0FDF4':hasPre?'#FFF7ED':'#F9FAFB';
-          const border=hasPos?'#86EFAC':hasPre?'#FCD34D':'#E5E7EB';
-          const status=hasPos?'✅ Pré + Pós':hasPre?'📋 Só Pré':'— Sem avaliação';
+          const hasFin=fin.find(d=>d.jogador_id===j.id||(d.jogador_id==null&&d.nome===j.nome));
+          const color=hasFin?'#EFF6FF':hasPos?'#F0FDF4':hasPre?'#FFF7ED':'#F9FAFB';
+          const border=hasFin?'#BFDBFE':hasPos?'#86EFAC':hasPre?'#FCD34D':'#E5E7EB';
+          const status=hasFin?'🏆 Completo':hasPos?'✅ Pré + Pós':hasPre?'📋 Só Pré':'— Sem avaliação';
           return`<div style="background:${color};border:1px solid ${border};border-radius:8px;padding:8px 10px;font-size:11px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
               ${j.foto?`<img src="${j.foto}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">`:`<div style="width:32px;height:32px;border-radius:50%;background:var(--red);color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${j.nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>`}
@@ -2621,6 +2624,7 @@ function renderAvalRegisto(){
             <div style="display:flex;gap:4px;flex-wrap:wrap">
               ${hasPre?`<button onclick="editAval('${j.nome}','pre')" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #FCD34D;background:#FEF9C3;color:#92400E;cursor:pointer">✏️ Pré</button><button onclick="deleteAval('${j.nome}','pre')" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #FECACA;background:#FEF2F2;color:#991B1B;cursor:pointer">🗑️</button>`:''}
               ${hasPos?`<button onclick="editAval('${j.nome}','pos')" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #6EE7B7;background:#D1FAE5;color:#065F46;cursor:pointer">✏️ Pós</button><button onclick="deleteAval('${j.nome}','pos')" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #FECACA;background:#FEF2F2;color:#991B1B;cursor:pointer">🗑️</button>`:''}
+              ${hasFin?`<button onclick="editAval('${j.nome}','final')" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #BFDBFE;background:#EFF6FF;color:#1E40AF;cursor:pointer">✏️ Final</button><button onclick="deleteAval('${j.nome}','final')" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #FECACA;background:#FEF2F2;color:#991B1B;cursor:pointer">🗑️</button>`:''}
             </div>
           </div>`;
         }).join('')}
