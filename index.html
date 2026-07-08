@@ -6138,32 +6138,44 @@ async function gerarPDFJogador(){
         if(row>=comps.length)return;
         const c=comps[row],i=preGestos.indexOf(c);
         const cx=margin+ci*colW;
-        const preV=pre.vals[i],posV=pos?pos.vals[i]:null;
-        doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(0,0,0);
-        doc.text(c.label,cx,y+row*6+4,{maxWidth:colW-18});
-        const dc=preV>=4?GREEN:preV>=3?ORANGE:RED;
-        doc.setFillColor(...dc);doc.circle(cx+colW-14,y+row*6+2.5,2.5,'F');
-        doc.setFontSize(7);doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');
-        doc.text(''+preV,cx+colW-14,y+row*6+3.5,{align:'center'});
-        if(posV!==null&&posV!==undefined){
-          const dc2=posV>=4?GREEN:posV>=3?ORANGE:RED;
-          doc.setFillColor(...dc2);doc.circle(cx+colW-14,y+row*6+2.5,2.5,'F');
-          doc.setFontSize(7);doc.setTextColor(255,255,255);
-          doc.text(''+posV,cx+colW-14,y+row*6+3.5,{align:'center'});
-        }
+        const preV=pre.vals[i];
+        const posV=pos?pos.vals[i]:null;
         const finV=fin?fin.vals[i]:null;
-        if(finV!==null&&finV!==undefined){
-          const dc3=finV>=4?GREEN:finV>=3?ORANGE:RED;
-          doc.setFillColor(...dc3);doc.circle(cx+colW-7,y+row*6+2.5,2.5,'F');
-          doc.setFontSize(7);doc.setTextColor(255,255,255);
-          doc.text(''+finV,cx+colW-7,y+row*6+3.5,{align:'center'});
+        // Posições dos círculos: pré, pós, final, evolução
+        // Ajuste dinâmico: 3 círculos se tiver final, 2 se só tiver pós, 1 se só pré
+        const hasPos=posV!==null&&posV!==undefined;
+        const hasFin=finV!==null&&finV!==undefined;
+        const labelMaxW=colW-(hasFin?22:hasPos?16:8);
+        doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(0,0,0);
+        doc.text(c.label,cx,y+row*6+4,{maxWidth:labelMaxW});
+        // Círculo PRÉ — sempre presente
+        const posXPre=hasFin?(cx+colW-20):hasPos?(cx+colW-13):(cx+colW-7);
+        const dc=preV>=4?GREEN:preV>=3?ORANGE:RED;
+        doc.setFillColor(...dc);doc.circle(posXPre,y+row*6+2.5,2.5,'F');
+        doc.setFontSize(7);doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');
+        doc.text(''+preV,posXPre,y+row*6+3.5,{align:'center'});
+        // Círculo PÓS
+        if(hasPos){
+          const posXPos=hasFin?(cx+colW-13):(cx+colW-7);
+          const dc2=posV>=4?GREEN:posV>=3?ORANGE:RED;
+          doc.setFillColor(...dc2);doc.circle(posXPos,y+row*6+2.5,2.5,'F');
+          doc.setFontSize(7);doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');
+          doc.text(''+posV,posXPos,y+row*6+3.5,{align:'center'});
         }
-        // Evolução: compara último valor disponível com pré
-        const lastV=finV!==null&&finV!==undefined?finV:(posV!==null&&posV!==undefined?posV:null);
+        // Círculo FINAL
+        if(hasFin){
+          const dc3=finV>=4?GREEN:finV>=3?ORANGE:RED;
+          doc.setFillColor(...dc3);doc.circle(cx+colW-6,y+row*6+2.5,2.5,'F');
+          doc.setFontSize(7);doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');
+          doc.text(''+finV,cx+colW-6,y+row*6+3.5,{align:'center'});
+        }
+        // Evolução — compara último valor com pré
+        const lastV=hasFin?finV:hasPos?posV:null;
         if(lastV!==null){
           const evo=lastV-preV;
-          doc.setFontSize(6);doc.setTextColor(evo>0?22:evo<0?180:107,evo>0?163:evo<0?20:114,evo>0?74:evo<0?20:128);
-          doc.text(evo>0?'+'+evo:evo<0?''+evo:'=',cx+colW-1,y+row*6+3.5,{align:'center'});
+          doc.setFontSize(6);doc.setFont('helvetica','normal');
+          doc.setTextColor(evo>0?22:evo<0?180:107,evo>0?163:evo<0?20:114,evo>0?74:evo<0?20:128);
+          doc.text(evo>0?'+'+evo:evo<0?''+evo:'=',cx+colW-0.5,y+row*6+3.5,{align:'center'});
         }
       });
     }
