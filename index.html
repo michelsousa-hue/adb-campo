@@ -2041,8 +2041,15 @@ function popularSelectsSub(){
 
 function sessDoGrupo(g){
   const epocaAlvo=epocaEmVisualizacao();
+  const subsAlvo=getSubsForGrupo(g);
   // Sessões sem campo "epoca" são de antes desta funcionalidade — tratadas como da época atual.
-  return DB.sessoes.filter(s=>s.grupo===g&&(s.epoca||DB.config.epoca)===epocaAlvo);
+  return DB.sessoes.filter(s=>{
+    if((s.epoca||DB.config.epoca)!==epocaAlvo) return false;
+    if(s.grupo===g) return true; // nome do grupo bate certo diretamente
+    // Se o grupo foi renomeado entretanto, compara pelos escalões (subs) que o grupo representa
+    const subsSessao=getSubsForGrupo(s.grupo);
+    return subsSessao.some(sub=>subsAlvo.includes(sub));
+  });
 }
 // Stats de jogo de um jogador a partir do histórico
 function statsJogoJogador(jid){
@@ -2088,7 +2095,7 @@ function renderDashboard(){
   const tc=mediaG>=META?'metric-ok':mediaG>=60?'metric-warn':'metric-danger';
   document.getElementById('dash-metrics').innerHTML=`
     <div class="metric-card"><div class="metric-label">Jogadores</div><div class="metric-value">${jogs.length}</div><div class="metric-sub">${g}</div></div>
-    <div class="metric-card"><div class="metric-label">Sessões</div><div class="metric-value">${sess.length}</div><div class="metric-sub">época ${DB.config.epoca}</div></div>
+    <div class="metric-card"><div class="metric-label">Sessões</div><div class="metric-value">${sess.length}</div><div class="metric-sub">época ${epocaEmVisualizacao()}</div></div>
     <div class="metric-card"><div class="metric-label">Taxa média</div><div class="metric-value ${tc}">${mediaG}%</div><div class="metric-sub">meta: ${META}%</div></div>
     <div class="metric-card"><div class="metric-label">Abaixo da meta</div><div class="metric-value ${abaixo?'metric-danger':'metric-ok'}">${abaixo}</div><div class="metric-sub">jogadores</div></div>`;
   const chart=document.getElementById('dash-chart');
@@ -2345,8 +2352,8 @@ function renderFicha(){
     btnPdfClin.onclick=()=>gerarPDFClinico(jid);
     header.appendChild(btnPdfClin);
   } else { btnPdfClin.onclick=()=>gerarPDFClinico(jid); }
-  const j=DB.jogadores.find(x=>x.id===jid);if(!j)return;
-  const g=getGrupoForSub(j.sub);
+  const g=currentGrupo.ficha;
+  const j=jogsDoGrupo(g).find(x=>x.id===jid);if(!j)return;
   const sess=sessDoGrupo(g),st=statsJogador(j,sess);
   const mediaG=sess.length&&jogsDoGrupo(g).length?Math.round(jogsDoGrupo(g).reduce((a,x)=>a+statsJogador(x,sess).taxa,0)/jogsDoGrupo(g).length):0;
   const ini=j.nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
