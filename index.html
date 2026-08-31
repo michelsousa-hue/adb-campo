@@ -1281,6 +1281,7 @@ textarea.form-input{resize:vertical;min-height:70px}
   <div class="modal" style="max-width:520px">
     <div class="modal-header"><span class="modal-title">⬆️ Subir Escalão</span><button class="modal-close" onclick="closeModal('modal-subir-escalao')">✕</button></div>
     <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px">Seleciona os jogadores e o novo escalão. Útil no início de cada época.</div>
+    <div id="subir-aviso-orfaos" style="display:none;font-size:12px;color:#92400E;background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:14px"></div>
     <div class="form-row" style="margin-bottom:14px">
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Filtrar por escalão atual</label>
@@ -1931,17 +1932,33 @@ function renderPage(p){
   const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();},inscricoes:renderInscricoes,biblioteca:renderBiblioteca,'planos-treino':renderPlanosTreino,mensalidades:renderMensalidades};
   if(map[p])map[p]();
 }
+const ORFAOS_KEY='__orfaos__';
+// Jogadores cujo escalão (sub) não corresponde a NENHUM grupo/escalão configurado atualmente.
+// Isto acontece tipicamente depois de criar/renomear escalões sem migrar todos os jogadores.
+function getOrfaos(){
+  const subsValidos=getAllSubs();
+  return DB.jogadores.filter(j=>!subsValidos.includes(j.sub));
+}
 function buildGrupoTabs(cid,pageKey){
   const c=document.getElementById(cid); if(!c)return;
   const grupos=currentUser?.grupos||GRUPOS;
-  c.innerHTML=grupos.map(g=>`<div class="gtab ${currentGrupo[pageKey]===g?'active':''}" onclick="setGrupo('${pageKey}','${g}')">${g}</div>`).join('');
+  let html=grupos.map(g=>`<div class="gtab ${currentGrupo[pageKey]===g?'active':''}" onclick="setGrupo('${pageKey}','${g}')">${g}</div>`).join('');
+  // Separador extra "Sem escalão" — nunca esconder jogadores cujo sub não bate certo com nenhum grupo.
+  const orfaos=getOrfaos();
+  if(orfaos.length>0 && !currentUser?.grupos){
+    html+=`<div class="gtab ${currentGrupo[pageKey]===ORFAOS_KEY?'active':''}" style="color:#DC2626;border-color:#FCA5A5" onclick="setGrupo('${pageKey}','${ORFAOS_KEY}')">⚠️ Sem escalão (${orfaos.length})</div>`;
+  }
+  c.innerHTML=html;
 }
 function setGrupo(page,g){currentGrupo[page]=g;renderPage(page);}
 function getSubsForGrupo(g){
   if(window._grupoSubs&&window._grupoSubs[g]) return window._grupoSubs[g];
   return g.split('+').map(s=>s.trim()).filter(Boolean);
 }
-function jogsDoGrupo(g){return DB.jogadores.filter(j=>getSubsForGrupo(g).includes(j.sub));}
+function jogsDoGrupo(g){
+  if(g===ORFAOS_KEY) return getOrfaos();
+  return DB.jogadores.filter(j=>getSubsForGrupo(g).includes(j.sub));
+}
 // Retorna todos os escalões (subs) únicos de todos os grupos configurados
 function getAllSubs(){
   const subs=[];
@@ -1950,7 +1967,7 @@ function getAllSubs(){
   });
   return subs;
 }
-// Dado um sub, devolve o grupo a que pertence
+// Dado um sub, devolve o grupo a que pertence (fallback ao primeiro grupo se o sub não existir em nenhum — usado só como grupo de referência para stats, nunca esconde o jogador das listas)
 function getGrupoForSub(sub){
   return (GRUPOS.length?GRUPOS:['Sub9+Sub11','Sub13+Sub15']).find(g=>getSubsForGrupo(g).includes(sub))||GRUPOS[0]||'Sub9+Sub11';
 }
@@ -4241,26 +4258,45 @@ function renderAdmin(){
 }
 function openModalSubirEscalao(){
   popularSelectsSub();
-  document.getElementById('subir-filtro').value='';
+  // Acrescenta opção "Sem escalão" ao filtro, para nunca ficarem jogadores escondidos
+  const orfaos=getOrfaos();
+  const filtroEl=document.getElementById('subir-filtro');
+  if(orfaos.length>0){
+    filtroEl.innerHTML+=`<option value="${ORFAOS_KEY}">⚠️ Sem escalão (${orfaos.length})</option>`;
+  }
+  const avisoEl=document.getElementById('subir-aviso-orfaos');
+  if(orfaos.length>0){
+    avisoEl.style.display='block';
+    avisoEl.innerHTML=`⚠️ Há <strong>${orfaos.length}</strong> jogador(es) cujo escalão atual não corresponde a nenhum escalão configurado (provavelmente ficaram para trás numa reorganização de escalões). Escolhe "⚠️ Sem escalão" no filtro para os veres e atribuíres um escalão válido — caso contrário não aparecem em lado nenhum da aplicação.`;
+    filtroEl.value=ORFAOS_KEY;
+  } else {
+    avisoEl.style.display='none';
+    filtroEl.value='';
+  }
   const allSubsArr=getAllSubs();document.getElementById('subir-novo-escalao').value=allSubsArr[1]||allSubsArr[0]||'';
   renderSubirLista();
   openModal('modal-subir-escalao');
 }
 function renderSubirLista(){
   const filtro=document.getElementById('subir-filtro').value;
-  const jogs=[...DB.jogadores].filter(j=>!filtro||j.sub===filtro).sort((a,b)=>a.nome.localeCompare(b.nome));
-  // Auto-sugerir novo escalão com base no filtro
-  const allSubs=getAllSubs();
-  const subirMap={};
-  allSubs.forEach((s,i)=>{subirMap[s]=allSubs[i+1]||s;});
-  if(filtro&&subirMap[filtro]) document.getElementById('subir-novo-escalao').value=subirMap[filtro];
+  const isOrfaos=filtro===ORFAOS_KEY;
+  const jogs=isOrfaos
+    ? getOrfaos().sort((a,b)=>a.nome.localeCompare(b.nome))
+    : [...DB.jogadores].filter(j=>!filtro||j.sub===filtro).sort((a,b)=>a.nome.localeCompare(b.nome));
+  // Auto-sugerir novo escalão com base no filtro (não faz sentido para "sem escalão")
+  if(!isOrfaos){
+    const allSubs=getAllSubs();
+    const subirMap={};
+    allSubs.forEach((s,i)=>{subirMap[s]=allSubs[i+1]||s;});
+    if(filtro&&subirMap[filtro]) document.getElementById('subir-novo-escalao').value=subirMap[filtro];
+  }
   const lista=document.getElementById('subir-lista');
   if(!jogs.length){lista.innerHTML='<div style="padding:12px;font-size:12px;color:var(--gray-400)">Nenhum jogador encontrado.</div>';return;}
   lista.innerHTML=jogs.map(j=>`
     <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--gray-100);font-size:13px">
       <input type="checkbox" class="subir-check" data-id="${j.id}" checked>
       <span style="flex:1"><strong>${j.nome}</strong> <span style="color:var(--gray-400);font-size:11px">#${j.num}</span></span>
-      <span class="badge badge-gray">${j.sub}</span>
+      <span class="badge ${isOrfaos?'badge-danger':'badge-gray'}">${j.sub||'(vazio)'}</span>
     </label>`).join('');
   // Listener para atualizar contagem
   lista.querySelectorAll('.subir-check').forEach(cb=>cb.addEventListener('change',atualizarContagemSubir));
@@ -5886,12 +5922,14 @@ async function savePIN(){
 async function novaEpoca(){
   const nome=document.getElementById('epoca-nome').value.trim();
   if(!nome){alert('Introduz o nome da época.');return;}
-  if(!confirm(`Iniciar nova época "${nome}"?`))return;
+  if(!confirm(`Iniciar nova época "${nome}"?\n\nIsto arquiva sessões/presenças da época anterior. Os escalões dos jogadores NÃO mudam automaticamente — a seguir vais poder rever/atualizar o escalão de cada jogador.`))return;
   await sb.from('presencas').delete().neq('id','x');
   await sb.from('sessoes').delete().neq('id','x');
   await sb.from('config').upsert({key:'epoca',value:nome});
   DB.sessoes=[];DB.presencas={};DB.config.epoca=nome;
   renderAdmin();toast('✅ Nova época iniciada!');showSync();
+  // Abre logo o "Subir Escalão" para reveres/confirmares o escalão de todos os jogadores nesta nova época.
+  openModalSubirEscalao();
 }
 
 // ═══ MODAIS & FORMS ═══
