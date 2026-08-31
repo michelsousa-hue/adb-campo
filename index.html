@@ -1741,7 +1741,9 @@ async function seedAvaliacoes(){
 function selectProfile(idx){
   selectedProfile=idx;
   if(idx==='mesa'){doLoginMesa();return;}
-  document.querySelectorAll('.pin-profile').forEach((el,i)=>el.classList.toggle('selected',i===idx));
+  document.querySelectorAll('.pin-profile').forEach(el=>el.classList.remove('selected'));
+  const card=document.getElementById('profile-'+idx);
+  if(card)card.classList.add('selected');
   document.getElementById('profile-list').style.display='none';
   document.getElementById('pin-entry').style.display='block';
   currentPin=''; updateDots(); document.getElementById('pin-error').textContent='';
@@ -1793,15 +1795,16 @@ function logout(){
 function renderLoginProfiles(){
   const list=document.getElementById('profile-list');
   if(!list)return;
-  // Ordem: Admin → Tesoureiro(s) → Coord Tec(s) → Treinadores → Mesa
+  // Fixos: Admin, Tesoureiro(s), Coordenador Técnico (só se existir), Mesa de Jogo.
+  // Dropdown: todos os treinadores (perfis normais, associados a grupos/escalões).
   function roleOrder(p){
     if(p.key==='coord')return 0;           // Admin fixo
     if(p.role==='tesoureiro')return 1;
     if(p.role==='coord')return 2;          // Coord Técnico
-    if(p.key==='mesa')return 4;
-    return 3;                              // Treinadores e outros
+    return 3;                              // Treinadores (vão para o dropdown)
   }
-  const sorted=[...profiles].sort((a,b)=>roleOrder(a)-roleOrder(b));
+  const fixos=[...profiles].filter(p=>roleOrder(p)<3).sort((a,b)=>roleOrder(a)-roleOrder(b));
+  const treinadores=[...profiles].filter(p=>roleOrder(p)===3);
   function profileCard(p,i,isMesa){
     if(isMesa){
       return`<div class="pin-profile" onclick="selectProfile('mesa')" id="profile-mesa" style="border-color:#F59E0B;background:#FFFBEB">
@@ -1822,8 +1825,26 @@ function renderLoginProfiles(){
       <div><div class="pin-profile-name">${p.name}</div><div class="pin-profile-role">${roleLabel}</div></div>
     </div>`;
   }
-  list.innerHTML=sorted.map(p=>profileCard(p,profiles.indexOf(p),false)).join('')
-    +profileCard(null,null,true);
+  let html=fixos.map(p=>profileCard(p,profiles.indexOf(p),false)).join('');
+  if(treinadores.length>0){
+    const opts=treinadores.map(p=>{
+      const idx=profiles.indexOf(p);
+      const label=p.grupos?p.grupos.join('+'):p.role||p.name;
+      return`<option value="${idx}">${p.name} — ${label}</option>`;
+    }).join('');
+    html+=`<div class="pin-profile" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="pin-profile-icon" style="background:#DBEAFE">🏒</div>
+        <div style="flex:1"><div class="pin-profile-name">Treinador</div><div class="pin-profile-role">Escolhe o teu escalão</div></div>
+      </div>
+      <select class="form-input" id="treinador-select" style="font-size:13px" onchange="if(this.value)selectProfile(Number(this.value))">
+        <option value="">— Selecionar treinador —</option>
+        ${opts}
+      </select>
+    </div>`;
+  }
+  html+=profileCard(null,null,true);
+  list.innerHTML=html;
 }
 function setupForUser(){
   const isAdmin=currentUser.key==='coord';          // Admin fixo (key coord mantém-se internamente)
