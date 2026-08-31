@@ -326,6 +326,10 @@ textarea.form-input{resize:vertical;min-height:70px}
       <button class="btn-logout" onclick="logout()">Sair</button>
     </div>
   </div>
+  <div id="banner-consulta-epoca" style="display:none;background:#FEF3C7;border-bottom:2px solid #F59E0B;padding:10px 20px;align-items:center;justify-content:center;gap:14px;font-size:13px;color:#92400E">
+    <span>📅 Estás a consultar a época <strong id="banner-consulta-epoca-nome"></strong> — modo só de leitura.</span>
+    <button class="btn btn-sm" onclick="sairConsultaEpoca()">🔙 Voltar à época atual</button>
+  </div>
   <div class="app-body">
     <nav class="sidebar" id="sidebar">
       <div class="nav-section admin-only" style="display:none">Administração</div>
@@ -1313,6 +1317,7 @@ textarea.form-input{resize:vertical;min-height:70px}
       <label class="form-label">Época</label>
       <select class="form-input" id="consulta-epoca-select" onchange="renderConsultaEpoca()"></select>
     </div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:14px" onclick="entrarConsultaEpoca()">🧭 Navegar nesta época (Dashboard, Sessões, Jogadores…)</button>
     <div id="consulta-epoca-conteudo" style="max-height:60vh;overflow-y:auto"></div>
   </div>
 </div>
@@ -1800,6 +1805,8 @@ function pinEnter(){
 function logout(){
   _caixaDesbloqueada=false;
   currentUser=null;currentPin='';selectedProfile=null;
+  consultaEpocaAtiva=null;
+  document.getElementById('banner-consulta-epoca').style.display='none';
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('profile-list').style.display='grid';
@@ -1990,9 +1997,20 @@ function getSubsForGrupo(g){
   if(window._grupoSubs&&window._grupoSubs[g]) return window._grupoSubs[g];
   return g.split('+').map(s=>s.trim()).filter(Boolean);
 }
+let consultaEpocaAtiva = null; // null = modo normal (época atual). Caso contrário, nome da época a consultar (read-only).
+function epocaEmVisualizacao(){ return consultaEpocaAtiva || DB.config.epoca; }
 function jogsDoGrupo(g){
-  if(g===ORFAOS_KEY) return getOrfaos();
-  return DB.jogadores.filter(j=>getSubsForGrupo(g).includes(j.sub));
+  const epocaAlvo=epocaEmVisualizacao();
+  if(epocaAlvo===DB.config.epoca){
+    if(g===ORFAOS_KEY) return getOrfaos();
+    return DB.jogadores.filter(j=>getSubsForGrupo(g).includes(j.sub));
+  }
+  // Modo consulta de época passada: usar o retrato do escalão guardado nessa época
+  const snap=(DB.config.historico_escaloes||{})[epocaAlvo]||[];
+  return snap.filter(sj=>getSubsForGrupo(g).includes(sj.sub)).map(sj=>{
+    const live=DB.jogadores.find(j=>j.id===sj.id);
+    return live?{...live,sub:sj.sub}:{id:sj.id,nome:sj.nome,num:sj.num,sub:sj.sub,_historico:true};
+  });
 }
 // Retorna todos os escalões (subs) únicos de todos os grupos configurados
 function getAllSubs(){
@@ -2022,9 +2040,9 @@ function popularSelectsSub(){
 }
 
 function sessDoGrupo(g){
-  const ep=DB.config.epoca;
+  const epocaAlvo=epocaEmVisualizacao();
   // Sessões sem campo "epoca" são de antes desta funcionalidade — tratadas como da época atual.
-  return DB.sessoes.filter(s=>s.grupo===g&&(!s.epoca||s.epoca===ep));
+  return DB.sessoes.filter(s=>s.grupo===g&&(s.epoca||DB.config.epoca)===epocaAlvo);
 }
 // Stats de jogo de um jogador a partir do histórico
 function statsJogoJogador(jid){
@@ -2180,6 +2198,7 @@ function setQual(jid,sid,n){
   const s=DB.sessoes.find(x=>x.id===sid);renderPresList(jogsDoGrupo(s.grupo),sid);
 }
 async function savePresencas(){
+  if(bloqueadoPorConsulta())return;
   const sid=document.getElementById('pres-sel').value;if(!sid)return;
   showLoading(true);
   const rows=Object.entries(tempPres).map(([jid,obj])=>({
@@ -2205,6 +2224,7 @@ function renderJogadores(){
   }).join(''):'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--gray-400)">Sem jogadores</td></tr>';
 }
 async function removeJog(id){
+  if(bloqueadoPorConsulta())return;
   if(!confirm('Remover jogador?'))return;
   await sb.from('jogadores').delete().eq('id',id);
   DB.jogadores=DB.jogadores.filter(j=>j.id!==id);
@@ -2276,6 +2296,7 @@ function fecharEditSessao(){
   document.getElementById('modal-edit-sessao').style.display='none';
 }
 async function saveEditSessao(){
+  if(bloqueadoPorConsulta())return;
   const id=document.getElementById('edit-ses-id').value;
   const data=document.getElementById('edit-ses-data').value;
   const hora=document.getElementById('edit-ses-hora').value;
@@ -2292,6 +2313,7 @@ async function saveEditSessao(){
   toast('Sessão atualizada!');showSync();
 }
 async function removeSes(id){
+  if(bloqueadoPorConsulta())return;
   if(!confirm('Remover sessão?'))return;
   await sb.from('presencas').delete().eq('sessao_id',id);
   await sb.from('sessoes').delete().eq('id',id);
@@ -2793,6 +2815,7 @@ function setRegVal(idx,val){
   });
 }
 async function saveAvaliacao(nome,tipo){
+  if(bloqueadoPorConsulta())return;
   const fichaId=window._regFichaId||FICHA_LEGACY_ID;
   const nGestos=window._regGestosLen||19;
   if(!window._regVals||window._regVals.length!==nGestos){alert('Preenche todas as competências!');return;}
@@ -2845,6 +2868,7 @@ async function saveAvaliacao(nome,tipo){
   }
 }
 async function deleteAval(nome,tipo){
+  if(bloqueadoPorConsulta())return;
   const label=tipo==='pre'?'Pré-teste':tipo==='pos'?'Pós-teste':'Final de Época';
   if(!confirm('Apagar '+label+' de '+nome+'?'))return;
   const fichaId=fichaAtiva.id;
@@ -4354,6 +4378,7 @@ function subirSelecionarTodos(sel){
   atualizarContagemSubir();
 }
 async function confirmarSubirEscalao(){
+  if(bloqueadoPorConsulta())return;
   const novoSub=document.getElementById('subir-novo-escalao').value;
   const selecionados=[...document.querySelectorAll('.subir-check:checked')].map(cb=>cb.dataset.id);
   if(!selecionados.length){toast('Seleciona pelo menos um jogador!');return;}
@@ -4389,6 +4414,33 @@ function abrirConsultaEpoca(){
   sel.innerHTML=epocas.map(e=>`<option value="${e}">${e}${e===DB.config.epoca?' (atual)':''}</option>`).join('');
   openModal('modal-consultar-epoca');
   renderConsultaEpoca();
+}
+function entrarConsultaEpoca(){
+  const epoca=document.getElementById('consulta-epoca-select').value;
+  closeModal('modal-consultar-epoca');
+  if(epoca===DB.config.epoca){toast('Já estás na época atual!');return;}
+  consultaEpocaAtiva=epoca;
+  document.getElementById('banner-consulta-epoca-nome').textContent=epoca;
+  document.getElementById('banner-consulta-epoca').style.display='flex';
+  toast('📅 A consultar época '+epoca);
+  renderPage('dashboard');
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  const navDash=document.querySelector('[data-page="dashboard"]');
+  if(navDash)navDash.classList.add('active');
+}
+function sairConsultaEpoca(){
+  consultaEpocaAtiva=null;
+  document.getElementById('banner-consulta-epoca').style.display='none';
+  toast('✅ De volta à época atual');
+  renderPage(currentPage||'dashboard');
+}
+// Impede edições enquanto se navega numa época passada (modo só de leitura)
+function bloqueadoPorConsulta(){
+  if(consultaEpocaAtiva){
+    toast('⚠️ Estás em modo de consulta (só leitura). Sai da consulta para editar.');
+    return true;
+  }
+  return false;
 }
 function renderConsultaEpoca(){
   const epoca=document.getElementById('consulta-epoca-select').value;
@@ -6040,6 +6092,7 @@ async function savePIN(){
   closeModal('modal-pin');toast('✅ PIN alterado!');showSync();renderAdmin();
 }
 async function novaEpoca(){
+  if(bloqueadoPorConsulta())return;
   const nome=document.getElementById('epoca-nome').value.trim();
   if(!nome){alert('Introduz o nome da época.');return;}
   if(!confirm(`Iniciar nova época "${nome}"?\n\nSessões, presenças e avaliações da época atual ficam guardadas para consulta (Admin → Consultar Época) e deixam de aparecer nas listas do dia-a-dia. Os escalões dos jogadores NÃO mudam automaticamente — a seguir vais poder rever/atualizar o escalão de cada jogador.`))return;
@@ -6071,6 +6124,7 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
 async function saveSessao(){
+  if(bloqueadoPorConsulta())return;
   const data=document.getElementById('ses-data').value;if(!data){alert('Escolhe uma data');return;}
   const s={id:uid(),data,hora:document.getElementById('ses-hora').value,tipo:document.getElementById('ses-tipo').value,grupo:document.getElementById('ses-grupo').value,descricao:document.getElementById('ses-desc').value,notas:document.getElementById('ses-notas').value,epoca:DB.config.epoca};
   showLoading(true);
@@ -6079,6 +6133,7 @@ async function saveSessao(){
   showLoading(false);closeModal('modal-sessao');renderPage(currentPage);toast('✅ Sessão criada!');showSync();
 }
 async function saveJogador(){
+  if(bloqueadoPorConsulta())return;
   const nome=document.getElementById('jog-nome').value.trim();if(!nome){alert('Introduz o nome');return;}
   showLoading(true);
   if(editingJogId){
