@@ -708,7 +708,7 @@ textarea.form-input{resize:vertical;min-height:70px}
           </div>
           <div class="card">
             <div class="card-title">📅 Nova Época</div>
-            <div class="epoca-info">⚠️ Iniciar nova época arquiva os dados e reinicia contadores.</div>
+            <div class="epoca-info">ℹ️ Sessões, presenças e avaliações da época atual ficam guardadas para consulta.</div>
             <div class="form-group" style="margin-bottom:12px"><label class="form-label">Nome da época</label><input type="text" class="form-input" id="epoca-nome" placeholder="ex: 2025/2026"></div>
             <button class="btn btn-primary" onclick="novaEpoca()">Iniciar Nova Época</button>
           </div>
@@ -716,6 +716,7 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div class="card">
           <div class="card-title">📊 Época atual: <span id="epoca-label"></span></div>
           <div class="metrics-grid" id="admin-metrics"></div>
+          <button class="btn btn-sm" style="margin-top:12px" onclick="abrirConsultaEpoca()">🔎 Consultar Época</button>
         </div>
         <div class="card" style="margin-top:12px">
           <div class="card-title" style="margin-bottom:12px">📋 Mesa de Jogo</div>
@@ -1305,6 +1306,17 @@ textarea.form-input{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<div id="modal-consultar-epoca" class="modal-bg">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header"><span class="modal-title">🔎 Consultar Época</span><button class="modal-close" onclick="closeModal('modal-consultar-epoca')">✕</button></div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Época</label>
+      <select class="form-input" id="consulta-epoca-select" onchange="renderConsultaEpoca()"></select>
+    </div>
+    <div id="consulta-epoca-conteudo" style="max-height:60vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 <div id="modal-delegado" class="modal-bg">
   <div class="modal">
     <div class="modal-header"><span class="modal-title" id="modal-delegado-title">Novo Delegado</span><button class="modal-close" onclick="closeModal('modal-delegado')">✕</button></div>
@@ -1517,7 +1529,7 @@ const COMPS = [
 ];
 
 // ═══ STATE ═══
-let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], fichas_avaliacao:[], inscricoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026'}, delegados:[], treinos:[], mensalidades:[], mensalidades_valores:{} };
+let DB = { jogadores:[], sessoes:[], presencas:{}, avaliacoes:[], fichas_avaliacao:[], inscricoes:[], config:{pins:{coord:'1234',t1:'1111',t2:'2222'},epoca:'2025/2026',historico_escaloes:{},epocas_historico:[]}, delegados:[], treinos:[], mensalidades:[], mensalidades_valores:{} };
 // Ficha legado (19 gestos originais — nunca apagar para preservar registos existentes)
 const FICHA_LEGACY_ID = 'iniciacao_legacy';
 const FICHA_LEGACY = {
@@ -1655,6 +1667,8 @@ async function loadAllData(){
       if(c.key==='grupo_subs'){try{window._grupoSubs=JSON.parse(c.value)||{};}catch(e){window._grupoSubs={};}}
       if(c.key==='profiles'){try{const ps=JSON.parse(c.value);if(Array.isArray(ps)&&ps.length>0){profiles.length=0;ps.forEach(p=>profiles.push({...p,licenca:p.licenca||'',cont:p.cont||''}));}}catch(e){}}
       if(c.key==='mensalidades_valores'){try{DB.mensalidades_valores=JSON.parse(c.value)||{};}catch(e){DB.mensalidades_valores={};}}
+      if(c.key==='historico_escaloes'){try{DB.config.historico_escaloes=JSON.parse(c.value)||{};}catch(e){DB.config.historico_escaloes={};}}
+      if(c.key==='epocas_historico'){try{DB.config.epocas_historico=JSON.parse(c.value)||[];}catch(e){DB.config.epocas_historico=[];}}
     });
     // Re-renderizar lista de perfis no login com dados do Supabase
     renderLoginProfiles();
@@ -2007,7 +2021,11 @@ function popularSelectsSub(){
   });
 }
 
-function sessDoGrupo(g){return DB.sessoes.filter(s=>s.grupo===g);}
+function sessDoGrupo(g){
+  const ep=DB.config.epoca;
+  // Sessões sem campo "epoca" são de antes desta funcionalidade — tratadas como da época atual.
+  return DB.sessoes.filter(s=>s.grupo===g&&(!s.epoca||s.epoca===ep));
+}
 // Stats de jogo de um jogador a partir do histórico
 function statsJogoJogador(jid){
   const jogos=DB.jogos||[];
@@ -2784,8 +2802,11 @@ async function saveAvaliacao(nome,tipo){
   // Procurar registo existente de forma mais robusta:
   // 1) pelo id da ficha exato, ou
   // 2) pelo FICHA_LEGACY_ID se ficha_id for nulo
+  // 3) SEMPRE dentro da mesma época — uma avaliação de outra época nunca deve ser sobrescrita
+  const epocaAtual=DB.config.epoca||'2025/2026';
   const existing = DB.avaliacoes.find(d =>
     d.tipo===tipo && d.nome===nome &&
+    (d.epoca||'2025/2026')===epocaAtual &&
     ((d.ficha_id||FICHA_LEGACY_ID)===fichaId || (!d.ficha_id && fichaId===FICHA_LEGACY_ID))
   );
 
@@ -4349,6 +4370,84 @@ async function confirmarSubirEscalao(){
   toast('✅ '+selecionados.length+' jogador(es) atualizados para '+novoSub+'!');
   showSync();
   renderPage(currentPage);
+}
+
+// ═══ CONSULTAR ÉPOCA ═══
+function _listaTodasEpocas(){
+  const set=new Set();
+  (DB.config.epocas_historico||[]).forEach(e=>set.add(e));
+  Object.keys(DB.config.historico_escaloes||{}).forEach(e=>set.add(e));
+  DB.sessoes.forEach(s=>{if(s.epoca)set.add(s.epoca);});
+  DB.avaliacoes.forEach(a=>{if(a.epoca)set.add(a.epoca);});
+  (DB.mensalidades||[]).forEach(m=>{if(m.epoca)set.add(m.epoca);});
+  set.add(DB.config.epoca);
+  return [...set].sort().reverse();
+}
+function abrirConsultaEpoca(){
+  const epocas=_listaTodasEpocas();
+  const sel=document.getElementById('consulta-epoca-select');
+  sel.innerHTML=epocas.map(e=>`<option value="${e}">${e}${e===DB.config.epoca?' (atual)':''}</option>`).join('');
+  openModal('modal-consultar-epoca');
+  renderConsultaEpoca();
+}
+function renderConsultaEpoca(){
+  const epoca=document.getElementById('consulta-epoca-select').value;
+  const isAtual=epoca===DB.config.epoca;
+  const cont=document.getElementById('consulta-epoca-conteudo');
+
+  // 1) Escalão de cada jogador nessa época
+  let escaloesHtml;
+  if(isAtual){
+    const lista=[...DB.jogadores].sort((a,b)=>a.nome.localeCompare(b.nome));
+    escaloesHtml=lista.map(j=>`<tr><td>${j.nome}</td><td>#${j.num||'—'}</td><td><span class="badge badge-gray">${j.sub||'—'}</span></td></tr>`).join('');
+  } else {
+    const snap=(DB.config.historico_escaloes||{})[epoca];
+    if(snap&&snap.length){
+      escaloesHtml=[...snap].sort((a,b)=>a.nome.localeCompare(b.nome)).map(j=>`<tr><td>${j.nome}</td><td>#${j.num||'—'}</td><td><span class="badge badge-gray">${j.sub||'—'}</span></td></tr>`).join('');
+    } else {
+      escaloesHtml=`<tr><td colspan="3" style="color:var(--gray-400);padding:10px">Sem retrato guardado desta época (época anterior a esta funcionalidade).</td></tr>`;
+    }
+  }
+
+  // 2) Sessões e presenças dessa época
+  const sessoesEp=DB.sessoes.filter(s=>(s.epoca||DB.config.epoca)===epoca).sort((a,b)=>b.data.localeCompare(a.data));
+  const nTreinos=sessoesEp.filter(s=>s.tipo!=='jogo').length;
+  const nJogos=sessoesEp.filter(s=>s.tipo==='jogo').length;
+  const sessoesHtml=sessoesEp.length?sessoesEp.map(s=>{
+    const pr=DB.presencas[s.id]||{};
+    const np=Object.values(pr).filter(v=>v==='P'||(v&&typeof v==='object'&&v.estado==='P')).length;
+    const reg=Object.keys(pr).length>0;
+    return `<tr><td>${fmtDate(s.data)}</td><td><span class="badge ${s.tipo==='jogo'?'badge-info':'badge-gray'}">${s.tipo==='jogo'?'Jogo':'Treino'}</span></td><td>${s.grupo||'—'}</td><td>${reg?np:'—'}</td></tr>`;
+  }).join(''):`<tr><td colspan="4" style="color:var(--gray-400);padding:10px">Sem sessões registadas nesta época.</td></tr>`;
+
+  // 3) Avaliações técnicas dessa época
+  const avalEp=DB.avaliacoes.filter(a=>(a.epoca||'2025/2026')===epoca);
+  const jogadoresAvaliados=[...new Set(avalEp.map(a=>a.nome))];
+  const avaliacoesHtml=jogadoresAvaliados.length?jogadoresAvaliados.sort().map(nome=>{
+    const n=avalEp.filter(a=>a.nome===nome).length;
+    return `<tr><td>${nome}</td><td>${n} avaliação(ões)</td></tr>`;
+  }).join(''):`<tr><td colspan="2" style="color:var(--gray-400);padding:10px">Sem avaliações nesta época.</td></tr>`;
+
+  // 4) Mensalidades dessa época
+  const mensEp=(DB.mensalidades||[]).filter(m=>(m.epoca||DB.config.epoca)===epoca);
+  const totalMens=mensEp.reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const porJogador={};
+  mensEp.forEach(m=>{const j=DB.jogadores.find(x=>x.id===m.jogador_id);const nome=j?j.nome:'(jogador removido)';porJogador[nome]=(porJogador[nome]||0)+(parseFloat(m.valor)||0);});
+  const mensHtml=Object.keys(porJogador).length?Object.entries(porJogador).sort((a,b)=>a[0].localeCompare(b[0])).map(([nome,val])=>`<tr><td>${nome}</td><td>€${val.toFixed(2)}</td></tr>`).join(''):`<tr><td colspan="2" style="color:var(--gray-400);padding:10px">Sem pagamentos registados nesta época.</td></tr>`;
+
+  cont.innerHTML=`
+    <div class="card-title" style="font-size:13px;margin-bottom:8px">👥 Escalão dos jogadores</div>
+    <table class="tbl" style="margin-bottom:18px"><thead><tr><th>Nome</th><th>Nº</th><th>Escalão</th></tr></thead><tbody>${escaloesHtml}</tbody></table>
+
+    <div class="card-title" style="font-size:13px;margin-bottom:8px">📅 Sessões (${nTreinos} treinos, ${nJogos} jogos)</div>
+    <table class="tbl" style="margin-bottom:18px"><thead><tr><th>Data</th><th>Tipo</th><th>Grupo</th><th>Presentes</th></tr></thead><tbody>${sessoesHtml}</tbody></table>
+
+    <div class="card-title" style="font-size:13px;margin-bottom:8px">⭐ Avaliações técnicas</div>
+    <table class="tbl" style="margin-bottom:18px"><thead><tr><th>Jogador</th><th>Avaliações</th></tr></thead><tbody>${avaliacoesHtml}</tbody></table>
+
+    <div class="card-title" style="font-size:13px;margin-bottom:8px">💶 Mensalidades — total: €${totalMens.toFixed(2)}</div>
+    <table class="tbl"><thead><tr><th>Jogador</th><th>Total pago</th></tr></thead><tbody>${mensHtml}</tbody></table>
+  `;
 }
 
 // ═══ TREINOS ═══
@@ -5943,12 +6042,26 @@ async function savePIN(){
 async function novaEpoca(){
   const nome=document.getElementById('epoca-nome').value.trim();
   if(!nome){alert('Introduz o nome da época.');return;}
-  if(!confirm(`Iniciar nova época "${nome}"?\n\nIsto arquiva sessões/presenças da época anterior. Os escalões dos jogadores NÃO mudam automaticamente — a seguir vais poder rever/atualizar o escalão de cada jogador.`))return;
-  await sb.from('presencas').delete().neq('id','x');
-  await sb.from('sessoes').delete().neq('id','x');
+  if(!confirm(`Iniciar nova época "${nome}"?\n\nSessões, presenças e avaliações da época atual ficam guardadas para consulta (Admin → Consultar Época) e deixam de aparecer nas listas do dia-a-dia. Os escalões dos jogadores NÃO mudam automaticamente — a seguir vais poder rever/atualizar o escalão de cada jogador.`))return;
+  const epocaQueTermina=DB.config.epoca;
+  showLoading(true);
+  // 1) Guardar um retrato do escalão de cada jogador nesta época que está a terminar
+  const snapshot=DB.jogadores.map(j=>({id:j.id,nome:j.nome,num:j.num,sub:j.sub}));
+  const historico=DB.config.historico_escaloes||{};
+  historico[epocaQueTermina]=snapshot;
+  await sb.from('config').upsert({key:'historico_escaloes',value:JSON.stringify(historico)});
+  DB.config.historico_escaloes=historico;
+  // 2) Manter o registo de todas as épocas já usadas (para o dropdown de "Consultar Época")
+  const listaEpocas=DB.config.epocas_historico||[];
+  if(!listaEpocas.includes(epocaQueTermina))listaEpocas.push(epocaQueTermina);
+  await sb.from('config').upsert({key:'epocas_historico',value:JSON.stringify(listaEpocas)});
+  DB.config.epocas_historico=listaEpocas;
+  // 3) Mudar para a nova época — sessões/presenças/avaliações da época anterior NÃO são apagadas,
+  //    apenas deixam de aparecer nas listas do dia-a-dia (filtradas por época atual).
   await sb.from('config').upsert({key:'epoca',value:nome});
-  DB.sessoes=[];DB.presencas={};DB.config.epoca=nome;
-  renderAdmin();toast('✅ Nova época iniciada!');showSync();
+  DB.config.epoca=nome;
+  showLoading(false);
+  renderAdmin();toast('✅ Nova época iniciada! Dados da época anterior ficam guardados para consulta.');showSync();
   // Abre logo o "Subir Escalão" para reveres/confirmares o escalão de todos os jogadores nesta nova época.
   openModalSubirEscalao();
 }
@@ -5959,7 +6072,7 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
 async function saveSessao(){
   const data=document.getElementById('ses-data').value;if(!data){alert('Escolhe uma data');return;}
-  const s={id:uid(),data,hora:document.getElementById('ses-hora').value,tipo:document.getElementById('ses-tipo').value,grupo:document.getElementById('ses-grupo').value,descricao:document.getElementById('ses-desc').value,notas:document.getElementById('ses-notas').value};
+  const s={id:uid(),data,hora:document.getElementById('ses-hora').value,tipo:document.getElementById('ses-tipo').value,grupo:document.getElementById('ses-grupo').value,descricao:document.getElementById('ses-desc').value,notas:document.getElementById('ses-notas').value,epoca:DB.config.epoca};
   showLoading(true);
   await sb.from('sessoes').insert(s);
   DB.sessoes.unshift(s);
