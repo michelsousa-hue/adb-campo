@@ -518,7 +518,7 @@ textarea.form-input{resize:vertical;min-height:70px}
               <option>Transição Ataque-Defesa</option><option>Transição Defesa-Ataque</option>
               <option>Guarda-Redes</option><option>Físico</option>
             </select>
-            <a href="https://editor-exercicios.vercel.app" target="_blank" class="btn btn-primary">✏️ Abrir Editor</a>
+            <button class="btn btn-primary" onclick="abrirEditor()">✏️ Abrir Editor</button>
           </div>
         </div>
         <div id="bib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:4px"></div>
@@ -541,7 +541,7 @@ textarea.form-input{resize:vertical;min-height:70px}
               <option>Sub-9</option><option>Sub-11</option><option>Sub-13</option>
               <option>Sub-15</option><option>Sub-17</option><option>Sénior</option>
             </select>
-            <a href="https://editor-exercicios.vercel.app" target="_blank" class="btn btn-primary">✏️ Abrir Editor</a>
+            <button class="btn btn-primary" onclick="abrirEditor()">✏️ Abrir Editor</button>
           </div>
         </div>
         <div id="planos-lista"></div>
@@ -7780,7 +7780,23 @@ function aplicarIdentidadeClube(){
   }
 }
 
-// ═══ INIT ═══
+// ═══ ABRIR EDITOR COM TOKEN ═══
+function abrirEditor(){
+  var pins=DB.config?.pins||{};
+  // usar o PIN do utilizador actual
+  var pin=pins[currentUser?.key]||pins['coord']||'1234';
+  var token=_makeEditorToken(pin);
+  window.open('https://editor-exercicios.vercel.app?t='+encodeURIComponent(token),'_blank');
+}
+
+function _makeEditorToken(pin){
+  var SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9wanNibmt0eHBwaHdyanZ4dml6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTkxNDEsImV4cCI6MjA4OTMzNTE0MX0.RfZw2wSV9SzqUUQvvOiF9vqPz8jOPtMwLYPcGaPG76U';
+  function hash(str){var h=0;for(var i=0;i<str.length;i++){h=(Math.imul(31,h)+str.charCodeAt(i))|0;}return Math.abs(h).toString(36);}
+  var ts=Date.now();
+  return btoa(pin+':'+ts+':'+hash(pin+ts+SUPABASE_KEY.slice(-8)));
+}
+
+// ═══ FIM ABRIR EDITOR ═══
 document.getElementById('ses-data').value=new Date().toISOString().split('T')[0];
 document.getElementById('conv-data').value=new Date().toISOString().split('T')[0];
 // ═══════════════════════════════════════════════════════
