@@ -7967,11 +7967,17 @@ async function savePlanoComoTreino(p, pdfBlob){
   try{
     var grupo=escalaoToGrupo(p.escalao);
     var path='treinos/plano-'+p.id+'.pdf';
-    var up=await sb.storage.from('Treinos').upload(path,pdfBlob,{contentType:'application/pdf',upsert:true});
+    console.log('A fazer upload para bucket Treinos, path:', path, 'blob size:', pdfBlob.size);
+    var up=await sb.storage.from('Treinos').upload(path, pdfBlob, {contentType:'application/pdf', upsert:true});
+    console.log('Upload result:', up.error ? up.error.message : 'OK');
     var ficheiro_url=null;
     if(!up.error){
       var pub=sb.storage.from('Treinos').getPublicUrl(path);
       ficheiro_url=pub.data.publicUrl;
+      console.log('URL pública:', ficheiro_url);
+    } else {
+      toast('⚠️ Erro no upload: '+up.error.message);
+      return;
     }
     var titulo='Plano '+(p.data||'')+(p.escalao?' · '+p.escalao:'')+(p.objetivos?' — '+p.objetivos.substring(0,40):'');
     var rec={
@@ -7983,15 +7989,16 @@ async function savePlanoComoTreino(p, pdfBlob){
       ficheiro_mime:'application/pdf',
       criado_em:new Date().toISOString()
     };
-    // upsert para não duplicar se já existir
-    await sb.from('treinos').upsert(rec);
-    // actualizar DB local
+    console.log('A guardar treino:', rec);
+    var result=await sb.from('treinos').upsert(rec);
+    console.log('Upsert result:', result.error ? result.error.message : 'OK');
+    if(result.error){toast('⚠️ Erro ao guardar treino: '+result.error.message);return;}
     var idx=(DB.treinos||[]).findIndex(function(t){return t.id===rec.id;});
     if(idx>=0) DB.treinos[idx]=rec; else { DB.treinos=DB.treinos||[]; DB.treinos.push(rec); }
     toast('✅ Plano guardado na aba Treinos ('+grupo+')!');
   }catch(err){
-    console.warn('Erro ao guardar plano como treino:',err);
-    toast('⚠️ PDF exportado mas não foi possível guardar na aba Treinos.');
+    console.error('Erro savePlanoComoTreino:', err);
+    toast('⚠️ Erro: '+err.message);
   }
 }
 
