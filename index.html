@@ -7949,6 +7949,52 @@ function closeFullscreen(){
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeFullscreen();});
 
 // ── PDF DO PLANO (na app) ──
+// Mapear escalão do plano para grupo da aba Treinos
+function escalaoToGrupo(escalao){
+  if(!escalao) return GRUPOS[0]||'Sub9+Sub11';
+  var e=escalao.toLowerCase().replace(/[^a-z0-9]/g,'');
+  for(var i=0;i<GRUPOS.length;i++){
+    var g=GRUPOS[i];
+    var subs=g.split('+');
+    if(subs.some(function(s){return e.includes(s.toLowerCase().replace(/[^a-z0-9]/g,''));}))
+      return g;
+  }
+  return GRUPOS[0]||'Sub9+Sub11';
+}
+
+// Guardar plano como unidade de treino na aba Treinos
+async function savePlanoComoTreino(p, pdfBlob){
+  try{
+    var grupo=escalaoToGrupo(p.escalao);
+    var path='treinos/plano-'+p.id+'.pdf';
+    var up=await sb.storage.from('Treinos').upload(path,pdfBlob,{contentType:'application/pdf',upsert:true});
+    var ficheiro_url=null;
+    if(!up.error){
+      var pub=sb.storage.from('Treinos').getPublicUrl(path);
+      ficheiro_url=pub.data.publicUrl;
+    }
+    var titulo='Plano '+(p.data||'')+(p.escalao?' · '+p.escalao:'')+(p.objetivos?' — '+p.objetivos.substring(0,40):'');
+    var rec={
+      id:'plano-'+p.id,
+      titulo:titulo,
+      data:p.data||new Date().toISOString().split('T')[0],
+      grupo:grupo,
+      ficheiro_url:ficheiro_url,
+      ficheiro_mime:'application/pdf',
+      criado_em:new Date().toISOString()
+    };
+    // upsert para não duplicar se já existir
+    await sb.from('treinos').upsert(rec);
+    // actualizar DB local
+    var idx=(DB.treinos||[]).findIndex(function(t){return t.id===rec.id;});
+    if(idx>=0) DB.treinos[idx]=rec; else { DB.treinos=DB.treinos||[]; DB.treinos.push(rec); }
+    toast('✅ Plano guardado na aba Treinos ('+grupo+')!');
+  }catch(err){
+    console.warn('Erro ao guardar plano como treino:',err);
+    toast('⚠️ PDF exportado mas não foi possível guardar na aba Treinos.');
+  }
+}
+
 async function exportPlanoAppPDF(id){
   var p=_planosTreino.find(function(x){return x.id===id;});
   if(!p)return;
@@ -8124,8 +8170,15 @@ async function exportPlanoAppPDF(id){
     }
   });
 
-  doc.save('plano-'+(p.data||'treino')+'.pdf');
-  toast('✅ PDF exportado!');
+  // Guardar como ficheiro para download
+  var pdfBlob=doc.output('blob');
+  // Download
+  var url=URL.createObjectURL(pdfBlob);
+  var a=document.createElement('a');a.href=url;a.download='plano-'+(p.data||'treino')+'.pdf';a.click();
+  URL.revokeObjectURL(url);
+  toast('✅ PDF exportado! A guardar na aba Treinos...');
+  // Guardar automaticamente na aba Treinos
+  await savePlanoComoTreino(p, pdfBlob);
 }
 
 function verPlanoBib(id){
