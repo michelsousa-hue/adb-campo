@@ -348,7 +348,7 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div class="nav-item" data-page="jogadores"><span class="nav-icon">👥</span>Jogadores</div>
       <div class="nav-item" data-page="mensalidades"><span class="nav-icon">💳</span>Mensalidades</div>
       <div class="nav-item" data-page="sessoes"><span class="nav-icon">📅</span>Sessões</div>
-      <div class="nav-item" data-page="treinos"><span class="nav-icon">📋</span>Treinos</div>
+      <div class="nav-item" data-page="treinos"><span class="nav-icon">📋</span>Unidades de Treino</div>
       <div class="nav-item" data-page="biblioteca"><span class="nav-icon">📚</span>Biblioteca</div>
       <div class="nav-item" data-page="planos-treino"><span class="nav-icon">📅</span>Planos</div>
       <div class="nav-item" data-page="metodologia"><span class="nav-icon">🔬</span>Metodologia</div>
@@ -4539,6 +4539,7 @@ function renderTreinos(){
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           ${t.ficheiro_url?`<button class="btn btn-sm" onclick="verTreinoFicheiro('${t.id}')" style="color:#2563EB">👁 Ver</button>`:''}
+          ${t.id&&t.id.startsWith('plano-')?`<button class="btn btn-sm" onclick="verPlanoDeTreino('${t.id.replace('plano-','')}')" style="color:#7c3aed;border-color:#ddd8fe">📅 Ver Plano</button>`:''}
           <button class="btn btn-sm" onclick="deleteTreino('${t.id}')" style="color:#DC2626;border-color:#FCA5A5">🗑️</button>
         </div>
       </div>
@@ -4621,6 +4622,18 @@ async function saveTreino(){
   toast('✅ Unidade de treino guardada!');
   currentGrupoTreinos=grupo;
   renderTreinos();
+}
+
+function verPlanoDeTreino(planoId){
+  // Navegar para a aba Planos e abrir o plano
+  var p=_planosTreino.find(function(x){return x.id===planoId;});
+  if(p){ verPlanoBib(planoId); return; }
+  // Se não estiver carregado ainda, carregar e abrir
+  loadPlanosTreino().then(function(){
+    var p2=_planosTreino.find(function(x){return x.id===planoId;});
+    if(p2) verPlanoBib(planoId);
+    else toast('⚠️ Plano não encontrado.');
+  });
 }
 
 function verTreinoFicheiro(id){
