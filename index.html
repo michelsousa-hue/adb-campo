@@ -348,7 +348,7 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div class="nav-item" data-page="jogadores"><span class="nav-icon">👥</span>Jogadores</div>
       <div class="nav-item" data-page="mensalidades"><span class="nav-icon">💳</span>Mensalidades</div>
       <div class="nav-item" data-page="sessoes"><span class="nav-icon">📅</span>Sessões</div>
-      <div class="nav-item" data-page="treinos"><span class="nav-icon">📋</span>Unidades de Treino</div>
+      <div class="nav-item" data-page="treinos"><span class="nav-icon">📋</span>Treinos</div>
       <div class="nav-item" data-page="biblioteca"><span class="nav-icon">📚</span>Biblioteca</div>
       <div class="nav-item" data-page="planos-treino"><span class="nav-icon">📅</span>Planos</div>
       <div class="nav-item" data-page="metodologia"><span class="nav-icon">🔬</span>Metodologia</div>
@@ -518,7 +518,7 @@ textarea.form-input{resize:vertical;min-height:70px}
               <option>Transição Ataque-Defesa</option><option>Transição Defesa-Ataque</option>
               <option>Guarda-Redes</option><option>Físico</option>
             </select>
-            <button class="btn btn-primary" onclick="abrirEditor()">✏️ Abrir Editor</button>
+            <a href="https://editor-exercicios.vercel.app" target="_blank" class="btn btn-primary">✏️ Abrir Editor</a>
           </div>
         </div>
         <div id="bib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:4px"></div>
@@ -541,7 +541,7 @@ textarea.form-input{resize:vertical;min-height:70px}
               <option>Sub-9</option><option>Sub-11</option><option>Sub-13</option>
               <option>Sub-15</option><option>Sub-17</option><option>Sénior</option>
             </select>
-            <button class="btn btn-primary" onclick="abrirEditor()">✏️ Abrir Editor</button>
+            <a href="https://editor-exercicios.vercel.app" target="_blank" class="btn btn-primary">✏️ Abrir Editor</a>
           </div>
         </div>
         <div id="planos-lista"></div>
@@ -1587,6 +1587,8 @@ const profiles = [
 
 // ═══ UTILS ═══
 function uid(){return '_'+Math.random().toString(36).slice(2,11)}
+// Normaliza o nome de uma época para evitar duplicados por espaços diferentes (ex: "2026 / 2027" vs "2026/2027")
+function normalizarEpoca(s){ return (s||'').trim().replace(/\s*\/\s*/g,'/'); }
 function avg(arr){return arr.reduce((a,b)=>a+b,0)/arr.length}
 function fmtDate(d){if(!d)return'—';const[y,m,dd]=d.split('-');return`${dd}/${m}/${y}`}
 function fmtDateS(d){if(!d)return'';const[y,m,dd]=d.split('-');return`${dd}/${m}`}
@@ -4539,7 +4541,6 @@ function renderTreinos(){
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           ${t.ficheiro_url?`<button class="btn btn-sm" onclick="verTreinoFicheiro('${t.id}')" style="color:#2563EB">👁 Ver</button>`:''}
-          ${t.id&&t.id.startsWith('plano-')?`<button class="btn btn-sm" onclick="verPlanoDeTreino('${t.id.replace('plano-','')}')" style="color:#7c3aed;border-color:#ddd8fe">📅 Ver Plano</button>`:''}
           <button class="btn btn-sm" onclick="deleteTreino('${t.id}')" style="color:#DC2626;border-color:#FCA5A5">🗑️</button>
         </div>
       </div>
@@ -4622,18 +4623,6 @@ async function saveTreino(){
   toast('✅ Unidade de treino guardada!');
   currentGrupoTreinos=grupo;
   renderTreinos();
-}
-
-function verPlanoDeTreino(planoId){
-  // Navegar para a aba Planos e abrir o plano
-  var p=_planosTreino.find(function(x){return x.id===planoId;});
-  if(p){ verPlanoBib(planoId); return; }
-  // Se não estiver carregado ainda, carregar e abrir
-  loadPlanosTreino().then(function(){
-    var p2=_planosTreino.find(function(x){return x.id===planoId;});
-    if(p2) verPlanoBib(planoId);
-    else toast('⚠️ Plano não encontrado.');
-  });
 }
 
 function verTreinoFicheiro(id){
@@ -6113,7 +6102,7 @@ async function savePIN(){
 }
 async function novaEpoca(){
   if(bloqueadoPorConsulta())return;
-  const nome=document.getElementById('epoca-nome').value.trim();
+  const nome=normalizarEpoca(document.getElementById('epoca-nome').value);
   if(!nome){alert('Introduz o nome da época.');return;}
   if(!confirm(`Iniciar nova época "${nome}"?\n\nSessões, presenças e avaliações da época atual ficam guardadas para consulta (Admin → Consultar Época) e deixam de aparecer nas listas do dia-a-dia. Os escalões dos jogadores NÃO mudam automaticamente — a seguir vais poder rever/atualizar o escalão de cada jogador.`))return;
   const epocaQueTermina=DB.config.epoca;
@@ -6971,9 +6960,9 @@ async function removeCategoria(tipo,idx){
   renderCatListas();toast('🗑️ Categoria removida');
 }
 async function fecharEpoca(){
-  const nova=(document.getElementById('nova-epoca-nome')?.value||'').trim();
+  const nova=normalizarEpoca(document.getElementById('nova-epoca-nome')?.value);
   if(!nova){alert('Introduz o nome da nova época');return;}
-  if(!confirm(`Fechar época actual e iniciar "${nova}"? O saldo transitará automaticamente.`))return;
+  if(!confirm(`⚠️ ATENÇÃO: isto muda a época atual de TODA a aplicação (sessões, presenças, jogadores) — não é só da Tesouraria.\n\nFechar época atual e iniciar "${nova}"? O saldo transitará automaticamente.\n\nSe já mudaste de época no separador Admin, escreve aqui EXATAMENTE o mesmo nome para não desalinhar os dados.`))return;
   // Calcular saldo actual da época corrente
   const epocaAtual=_currentEpoca();
   const movsEp=(DB_CAIXA.movimentos||[]).filter(m=>m.epoca===epocaAtual);
@@ -7793,23 +7782,7 @@ function aplicarIdentidadeClube(){
   }
 }
 
-// ═══ ABRIR EDITOR COM TOKEN ═══
-function abrirEditor(){
-  var pins=DB.config?.pins||{};
-  // usar o PIN do utilizador actual
-  var pin=pins[currentUser?.key]||pins['coord']||'1234';
-  var token=_makeEditorToken(pin);
-  window.open('https://editor-exercicios.vercel.app?t='+encodeURIComponent(token),'_blank');
-}
-
-function _makeEditorToken(pin){
-  var SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9wanNibmt0eHBwaHdyanZ4dml6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTkxNDEsImV4cCI6MjA4OTMzNTE0MX0.RfZw2wSV9SzqUUQvvOiF9vqPz8jOPtMwLYPcGaPG76U';
-  function hash(str){var h=0;for(var i=0;i<str.length;i++){h=(Math.imul(31,h)+str.charCodeAt(i))|0;}return Math.abs(h).toString(36);}
-  var ts=Date.now();
-  return btoa(pin+':'+ts+':'+hash(pin+ts+SUPABASE_KEY.slice(-8)));
-}
-
-// ═══ FIM ABRIR EDITOR ═══
+// ═══ INIT ═══
 document.getElementById('ses-data').value=new Date().toISOString().split('T')[0];
 document.getElementById('conv-data').value=new Date().toISOString().split('T')[0];
 // ═══════════════════════════════════════════════════════
@@ -7962,59 +7935,6 @@ function closeFullscreen(){
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeFullscreen();});
 
 // ── PDF DO PLANO (na app) ──
-// Mapear escalão do plano para grupo da aba Treinos
-function escalaoToGrupo(escalao){
-  if(!escalao) return GRUPOS[0]||'Sub9+Sub11';
-  var e=escalao.toLowerCase().replace(/[^a-z0-9]/g,'');
-  for(var i=0;i<GRUPOS.length;i++){
-    var g=GRUPOS[i];
-    var subs=g.split('+');
-    if(subs.some(function(s){return e.includes(s.toLowerCase().replace(/[^a-z0-9]/g,''));}))
-      return g;
-  }
-  return GRUPOS[0]||'Sub9+Sub11';
-}
-
-// Guardar plano como unidade de treino na aba Treinos
-async function savePlanoComoTreino(p, pdfBlob){
-  try{
-    var grupo=escalaoToGrupo(p.escalao);
-    var path='treinos/plano-'+p.id+'.pdf';
-    console.log('A fazer upload para bucket Treinos, path:', path, 'blob size:', pdfBlob.size);
-    var up=await sb.storage.from('Treinos').upload(path, pdfBlob, {contentType:'application/pdf', upsert:true});
-    console.log('Upload result:', up.error ? up.error.message : 'OK');
-    var ficheiro_url=null;
-    if(!up.error){
-      var pub=sb.storage.from('Treinos').getPublicUrl(path);
-      ficheiro_url=pub.data.publicUrl;
-      console.log('URL pública:', ficheiro_url);
-    } else {
-      toast('⚠️ Erro no upload: '+up.error.message);
-      return;
-    }
-    var titulo='Plano '+(p.data||'')+(p.escalao?' · '+p.escalao:'')+(p.objetivos?' — '+p.objetivos.substring(0,40):'');
-    var rec={
-      id:'plano-'+p.id,
-      titulo:titulo,
-      data:p.data||new Date().toISOString().split('T')[0],
-      grupo:grupo,
-      ficheiro_url:ficheiro_url,
-      ficheiro_mime:'application/pdf',
-      criado_em:new Date().toISOString()
-    };
-    console.log('A guardar treino:', rec);
-    var result=await sb.from('treinos').upsert(rec);
-    console.log('Upsert result:', result.error ? result.error.message : 'OK');
-    if(result.error){toast('⚠️ Erro ao guardar treino: '+result.error.message);return;}
-    var idx=(DB.treinos||[]).findIndex(function(t){return t.id===rec.id;});
-    if(idx>=0) DB.treinos[idx]=rec; else { DB.treinos=DB.treinos||[]; DB.treinos.push(rec); }
-    toast('✅ Plano guardado na aba Treinos ('+grupo+')!');
-  }catch(err){
-    console.error('Erro savePlanoComoTreino:', err);
-    toast('⚠️ Erro: '+err.message);
-  }
-}
-
 async function exportPlanoAppPDF(id){
   var p=_planosTreino.find(function(x){return x.id===id;});
   if(!p)return;
@@ -8190,15 +8110,8 @@ async function exportPlanoAppPDF(id){
     }
   });
 
-  // Guardar como ficheiro para download
-  var pdfBlob=doc.output('blob');
-  // Download
-  var url=URL.createObjectURL(pdfBlob);
-  var a=document.createElement('a');a.href=url;a.download='plano-'+(p.data||'treino')+'.pdf';a.click();
-  URL.revokeObjectURL(url);
-  toast('✅ PDF exportado! A guardar na aba Treinos...');
-  // Guardar automaticamente na aba Treinos
-  await savePlanoComoTreino(p, pdfBlob);
+  doc.save('plano-'+(p.data||'treino')+'.pdf');
+  toast('✅ PDF exportado!');
 }
 
 function verPlanoBib(id){
