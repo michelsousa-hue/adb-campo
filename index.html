@@ -518,7 +518,7 @@ textarea.form-input{resize:vertical;min-height:70px}
               <option>Transição Ataque-Defesa</option><option>Transição Defesa-Ataque</option>
               <option>Guarda-Redes</option><option>Físico</option>
             </select>
-            <a href="https://editor-exercicios.vercel.app" target="_blank" class="btn btn-primary">✏️ Abrir Editor</a>
+            <button class="btn btn-primary" onclick="abrirEditor()">✏️ Abrir Editor</button>
           </div>
         </div>
         <div id="bib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:4px"></div>
@@ -541,7 +541,7 @@ textarea.form-input{resize:vertical;min-height:70px}
               <option>Sub-9</option><option>Sub-11</option><option>Sub-13</option>
               <option>Sub-15</option><option>Sub-17</option><option>Sénior</option>
             </select>
-            <a href="https://editor-exercicios.vercel.app" target="_blank" class="btn btn-primary">✏️ Abrir Editor</a>
+            <button class="btn btn-primary" onclick="abrirEditor()">✏️ Abrir Editor</button>
           </div>
         </div>
         <div id="planos-lista"></div>
@@ -7780,6 +7780,16 @@ function aplicarIdentidadeClube(){
     const loginLogo=document.getElementById('login-logo-img');
     if(loginLogo){loginLogo.src=logo;loginLogo.style.display='block';}
   }
+}
+
+// ═══ ABRIR EDITOR COM TOKEN ═══
+function abrirEditor(){
+  var pins=DB.config?.pins||{};
+  var pin=pins[currentUser?.key]||pins['coord']||Object.values(pins)[0]||'1234';
+  function _hash(str){var h=0;for(var i=0;i<str.length;i++){h=(Math.imul(31,h)+str.charCodeAt(i))|0;}return Math.abs(h).toString(36);}
+  var ts=Date.now();
+  var token=btoa(pin+':'+ts+':'+_hash(pin+ts+SUPABASE_KEY.slice(-8)));
+  window.open('https://editor-exercicios.vercel.app?t='+encodeURIComponent(token),'_blank');
 }
 
 // ═══ INIT ═══
