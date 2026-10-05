@@ -3441,7 +3441,7 @@ function renderJogoAoVivo(){
           ${defesasArr.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100)">'+defesasArr.map(d=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><strong>${d.nome}</strong><span style="font-weight:700;color:#2563EB">×${d.n}</span></div>`).join('')+'</div>':''}
         </div>
       </div>
-      ${(subEvs.length||jogoState.eventos.some(e=>e.tipo==='inicio-parte'))?`<div class="card" style="margin:0"><div class="card-title" style="margin-bottom:8px">▶️ Cinco inicial e 🔄 substituições</div>${htmlPartes(jogoState.eventos,jogoState.numPartes)}</div>`:''}`;
+      ${(subEvs.length||jogoState.eventos.some(e=>e.tipo==='inicio-parte'))?`<div class="card" style="margin:0"><div class="card-title" style="margin-bottom:8px">📋 Desenrolar do jogo por parte</div>${htmlPartes(jogoState.eventos,jogoState.numPartes)}</div>`:''}`;
   }
 }
 async function gerarPDFJogo(){
@@ -3521,17 +3521,17 @@ async function gerarPDFJogo(){
     // ── Tempo em Campo (barras) ──
     if(jogadores.length){
       doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
-      doc.text('⏱ Tempo em Campo',margin,y);
+      doc.text('Tempo em Campo',margin,y);
       doc.setDrawColor(...GRAY);doc.setLineWidth(0.3);doc.line(margin,y+1,W-margin,y+1);
       y+=7;
-      const barX=margin+28,barW=cW-28-34,barH=4;
+      const barX=margin+30,barW=cW-30-34,barH=4;
       jogadores.forEach(function(jg){
         if(y>272){doc.addPage();y=16;}
         const t=tempos[jg.id]||0,pct=Math.min(t/Math.max(durTotal,1),1),mins=Math.floor(t/60);
         const golos=golosJog[jg.id]||0;
         // Nome
         doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...DARK);
-        doc.text(jg.nome.split(' ')[0],margin,y+3);
+        doc.text(_jogNome(jg.id),margin,y+3);
         // Barra fundo
         doc.setFillColor(...LGRAY);doc.roundedRect(barX,y,barW,barH,1,1,'F');
         // Barra preenchimento
@@ -3547,56 +3547,6 @@ async function gerarPDFJogo(){
       y+=4;
     }
 
-    // ── Golos por minuto ──
-    if(y>260){doc.addPage();y=16;}
-    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
-    doc.text('Golos',margin,y);
-    doc.setDrawColor(...RED);doc.setLineWidth(0.4);doc.line(margin,y+1,W-margin,y+1);
-    y+=6;
-    if(goloEvs.length){
-      goloEvs.forEach(function(e){
-        if(y>272){doc.addPage();y=16;}
-        const jg=DB.jogadores.find(function(x){return x.id===e.jid;});
-        doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-        doc.text(e.min+"'",margin+2,y);
-        doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
-        doc.text(jg?jg.nome:'—',margin+12,y);
-        y+=5;
-      });
-    } else {
-      doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-      doc.text('Sem golos registados',margin+2,y);
-    }
-    y+=6;
-
-    // ── Defesas GR ──
-    if(y>260){doc.addPage();y=16;}
-    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...BLUE);
-    doc.text('Defesas GR',margin,y);
-    doc.setDrawColor(...BLUE);doc.setLineWidth(0.4);doc.line(margin,y+1,W-margin,y+1);
-    y+=6;
-    if(defEvs.length){
-      defEvs.forEach(function(e){
-        if(y>272){doc.addPage();y=16;}
-        const jg=DB.jogadores.find(function(x){return x.id===e.jid;});
-        doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-        doc.text(e.min+"'",margin+2,y);
-        doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
-        doc.text(jg?jg.nome:'GR',margin+12,y);
-        y+=5;
-      });
-      // Resumo por GR
-      const defRes=Object.entries(defesasJog).map(function(entry){
-        const jg=DB.jogadores.find(function(x){return x.id===entry[0];});
-        return(jg?jg.nome.split(' ')[0]:'GR')+' ×'+entry[1];
-      }).join('  ');
-      if(defRes){doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);doc.text('Resumo: '+defRes,margin+2,y);y+=5;}
-    } else {
-      doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-      doc.text('Sem defesas registadas',margin+2,y);
-    }
-    y+=6;
-
     // ── Power Plays ──
     if((ppFTotal>0||ppCTotal>0)&&y<265){
       doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(30,30,30);
@@ -3604,32 +3554,38 @@ async function gerarPDFJogo(){
       doc.setDrawColor(...GRAY);doc.setLineWidth(0.4);doc.line(margin,y+1,W-margin,y+1);
       y+=6;
       doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...DARK);
-      if(ppFTotal>0)doc.text('⚡ A Favor: '+ppFTotal+' PP · '+ppFGolo+' golos · '+ppFEfic+'% eficácia'+(ppFDurSec>0?' · Dur: '+fmtS(ppFDurSec):''),margin+2,y);
+      if(ppFTotal>0)doc.text('A Favor: '+ppFTotal+' PP · '+ppFGolo+' golos · '+ppFEfic+'% eficácia'+(ppFDurSec>0?' · Dur: '+fmtS(ppFDurSec):''),margin+2,y);
       y+=5;
-      if(ppCTotal>0)doc.text('⚡ Contra: '+ppCTotal+' PP · '+ppCGolo+' sofridos · kill '+ppCKill+'%',margin+2,y);
+      if(ppCTotal>0)doc.text('Contra: '+ppCTotal+' PP · '+ppCGolo+' sofridos · kill '+ppCKill+'%',margin+2,y);
       y+=8;
     }
 
-    // ── Cinco inicial e substituições por parte ──
+    // ── Desenrolar do jogo por parte ──
     if(estP.partes.length||estP.semParte.length){
-      if(y>255){doc.addPage();y=16;}
+      if(y>250){doc.addPage();y=16;}
       doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
-      doc.text('Cinco inicial e substituições',margin,y);
+      doc.text('Desenrolar do jogo por parte',margin,y);
       doc.setDrawColor(...GRAY);doc.setLineWidth(0.4);doc.line(margin,y+1,W-margin,y+1);
       y+=6;
-      const linhaSub=function(e){
-        if(y>272){doc.addPage();y=16;}
+      const hex=function(h){h=h.replace('#','');return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];};
+      const linhaEv=function(e){
+        if(y>274){doc.addPage();y=16;}
+        const f=_evInfo(e);
         doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
         doc.text(_fmtMinSeg(e),margin+4,y);
-        doc.setTextColor(...DARK);
-        doc.text('Sub: '+_subTexto(e),margin+18,y);
+        doc.setFont('helvetica','bold');doc.setTextColor(...hex(f.cor));
+        doc.text(f.lab,margin+18,y);
+        if(f.txt){doc.setFont('helvetica','normal');doc.setTextColor(...DARK);doc.text(f.txt,margin+44,y);}
         y+=4.5;
       };
       estP.partes.forEach(function(pt){
-        if(y>262){doc.addPage();y=16;}
+        if(y>258){doc.addPage();y=16;}
+        doc.setFillColor(...LGRAY);doc.rect(margin,y-3.5,cW,5.5,'F');
         doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
         doc.text(pt.parte+'ª Parte',margin+2,y);
-        y+=4.5;
+        doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
+        doc.text('Parcial '+pt.parcial,W-margin-2,y,{align:'right'});
+        y+=5.5;
         const tit=pt.titulares?(pt.titulares.length?_titularesOrdenados(pt.titulares).map(function(id){return _jogNome(id)+(_jogIsGR(id)?' (GR)':'');}).join(', '):'ninguém em campo'):'não registado';
         doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
         doc.text('Cinco inicial:',margin+4,y);
@@ -3637,14 +3593,15 @@ async function gerarPDFJogo(){
         const tl=doc.splitTextToSize(tit,cW-30);
         doc.text(tl,margin+26,y);
         y+=4.5*tl.length;
-        if(pt.subs.length)pt.subs.forEach(linhaSub);
-        else{doc.setTextColor(...GRAY);doc.text('Sem substituições',margin+4,y);y+=4.5;}
-        y+=2;
+        if(pt.eventos.length)pt.eventos.forEach(linhaEv);
+        else{doc.setTextColor(...GRAY);doc.text('Sem eventos',margin+4,y);y+=4.5;}
+        y+=3;
       });
       if(estP.semParte.length){
+        if(y>262){doc.addPage();y=16;}
         doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(...GRAY);
-        doc.text('Substituições (sem parte registada)',margin+2,y);y+=4.5;
-        estP.semParte.forEach(linhaSub);
+        doc.text('Eventos sem parte registada',margin+2,y);y+=4.5;
+        estP.semParte.forEach(linhaEv);
       }
     }
 
@@ -3727,40 +3684,72 @@ function toggleCampo(jid){
   renderJogoAoVivo();
 }
 // ═══ Estrutura por partes (cinco inicial + substituições) ═══
+function e_seg(){return jogoState.timerSec;}
 function estruturaPartes(eventos,numPartes){
-  eventos=eventos||[];
+  eventos=(eventos||[]).map((e,i)=>({...e,_i:i}));
+  const ord=(x,y)=>((x.ts||0)-(y.ts||0))||(x._i-y._i);
+  const visiveis=e=>e.tipo!=='inicio-parte';
   const partes=[];
-  const maxParte=Math.max(numPartes||0,...eventos.map(e=>e.parte||0));
+  const maxParte=Math.max(numPartes||0,0,...eventos.map(e=>e.parte||0));
+  let sh=0,sa=0;
   for(let p=1;p<=maxParte;p++){
     const ini=eventos.find(e=>e.tipo==='inicio-parte'&&e.parte===p);
-    const subs=eventos.filter(e=>e.tipo==='sub'&&e.parte===p);
-    if(ini||subs.length)partes.push({parte:p,titulares:ini?ini.jids||[]:null,subs});
+    const evs=eventos.filter(e=>e.parte===p&&visiveis(e)).sort(ord);
+    const sh0=sh,sa0=sa;
+    evs.forEach(e=>{if(e.tipo==='golo')sh++;else if(e.tipo==='golo-s')sa++;e._placar=sh+'-'+sa;});
+    if(ini||evs.length)partes.push({parte:p,titulares:ini?ini.jids||[]:null,eventos:evs,subs:evs.filter(e=>e.tipo==='sub'),parcial:(sh-sh0)+'-'+(sa-sa0)});
   }
-  const semParte=eventos.filter(e=>e.tipo==='sub'&&!e.parte); // jogos antigos
+  const semParte=eventos.filter(e=>!e.parte&&visiveis(e)).sort(ord); // jogos antigos
+  semParte.forEach(e=>{if(e.tipo==='golo')sh++;else if(e.tipo==='golo-s')sa++;e._placar=sh+'-'+sa;});
   const titularCount={};
   partes.forEach(pt=>(pt.titulares||[]).forEach(id=>{titularCount[id]=(titularCount[id]||0)+1;}));
   const partesComTit=partes.filter(pt=>pt.titulares).length;
   return{partes,semParte,titularCount,partesComTit};
 }
-function _jogNome(id){const j=DB.jogadores.find(x=>x.id===id);return j?j.nome.split(' ')[0]:'?';}
+function _jogNome(id){
+  const j=DB.jogadores.find(x=>x.id===id);if(!j)return'?';
+  const p=(j.nome||'').trim().split(/\s+/);
+  return p[0]+(j.num!=null&&j.num!==''?' #'+j.num:(p.length>1?' '+p[p.length-1]:''));
+}
 function _jogIsGR(id){const j=DB.jogadores.find(x=>x.id===id);return!!(j&&j.pos&&j.pos.toLowerCase().includes('guarda'));}
-function _fmtMinSeg(e){if(e.seg!=null)return Math.floor(e.seg/60)+"'"+String(e.seg%60).padStart(2,'0')+"''";return e.min+"'";}
+function _fmtMinSeg(e){if(e.seg!=null)return Math.floor(e.seg/60)+"'"+String(e.seg%60).padStart(2,'0')+"''";return(e.min||0)+"'";}
 function _subTexto(e){
   if(e.jidSai!==undefined)return _jogNome(e.jid)+' entra'+(e.jidSai?' · '+_jogNome(e.jidSai)+' sai':'');
   return (e.desc||'').replace(/^Sub — /,'');
 }
+// Texto de um evento (sem emojis, serve para app e PDF)
+function _evInfo(e){
+  const n=e.jid?_jogNome(e.jid):'';
+  switch(e.tipo){
+    case'golo':return{ic:'⚽',lab:'Golo',txt:(n||'—')+'  ('+e._placar+')',cor:'#8B1A1A'};
+    case'golo-s':return{ic:'⚽',lab:'Golo sofrido',txt:'('+e._placar+')',cor:'#DC2626'};
+    case'defesa':return{ic:'🛡️',lab:'Defesa GR',txt:n||'GR',cor:'#2563EB'};
+    case'sub':return{ic:'🔄',lab:'Substituição',txt:_subTexto(e),cor:'#374151'};
+    case'falta':return{ic:'🟡',lab:'Falta',txt:n,cor:'#6B7280'};
+    case'amarelo':return{ic:'🟨',lab:'Cartão amarelo',txt:n,cor:'#B45309'};
+    case'azul':return{ic:'🟦',lab:'Cartão azul',txt:n,cor:'#1E40AF'};
+    case'vermelho':return{ic:'🟥',lab:'Cartão vermelho',txt:n,cor:'#B91C1C'};
+    default:
+      if(String(e.tipo).startsWith('pp-'))return{ic:'⚡',lab:String(e.tipo).includes('favor')?'PP a favor':'PP contra',txt:(e.desc||'').replace(/^.*?—\s*/,''),cor:String(e.tipo).includes('favor')?'#059669':'#DC2626'};
+      return{ic:e.icon||'•',lab:e.desc||e.tipo,txt:'',cor:'#374151'};
+  }
+}
 function _titularesOrdenados(ids){return[...ids].sort((a,b)=>_jogIsGR(b)-_jogIsGR(a));}
+function _htmlEvLinha(e){
+  const f=_evInfo(e);
+  return`<div style="display:flex;gap:6px;padding:2px 0 2px 8px;font-size:12px;color:var(--gray-700)"><span style="color:var(--gray-400);min-width:44px">${_fmtMinSeg(e)}</span><span>${f.ic}</span><span><strong style="color:${f.cor}">${f.lab}</strong>${f.txt?' — '+f.txt:''}</span></div>`;
+}
 function htmlPartes(eventos,numPartes){
   const est=estruturaPartes(eventos,numPartes);
-  if(!est.partes.length&&!est.semParte.length)return'<div style="font-size:12px;color:var(--gray-400)">Sem registos de partes ou substituições</div>';
+  if(!est.partes.length&&!est.semParte.length)return'<div style="font-size:12px;color:var(--gray-400)">Sem eventos registados</div>';
   let h=est.partes.map(pt=>{
     const tit=pt.titulares?(pt.titulares.length?_titularesOrdenados(pt.titulares).map(id=>(_jogIsGR(id)?'🧤 ':'')+'<strong>'+_jogNome(id)+'</strong>'+(_jogIsGR(id)?' <span style="font-size:10px;color:var(--gray-400)">(GR)</span>':'')).join(', '):'<span style="color:var(--gray-400)">ninguém em campo</span>'):'<span style="color:var(--gray-400)">não registado</span>';
-    const subs=pt.subs.length?pt.subs.map(e=>`<div style="padding:2px 0 2px 8px;font-size:12px;color:var(--gray-600)"><span style="color:var(--gray-400);display:inline-block;min-width:44px">${_fmtMinSeg(e)}</span>🔄 ${_subTexto(e)}</div>`).join(''):'<div style="padding:2px 0 2px 8px;font-size:11px;color:var(--gray-400)">Sem substituições</div>';
+    const evs=pt.eventos.length?pt.eventos.map(_htmlEvLinha).join(''):'<div style="padding:2px 0 2px 8px;font-size:11px;color:var(--gray-400)">Sem eventos</div>';
     return`<div style="background:var(--gray-50);border-radius:8px;padding:8px 10px;margin-bottom:8px">
-      <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">${pt.parte}ª Parte</div>
-      <div style="font-size:12px;margin-bottom:4px">▶️ Cinco inicial: ${tit}</div>${subs}</div>`;
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px"><span>${pt.parte}ª Parte</span><span style="color:var(--gray-500);font-weight:600">Parcial ${pt.parcial}</span></div>
+      <div style="font-size:12px;margin-bottom:4px">▶️ Cinco inicial: ${tit}</div>${evs}</div>`;
   }).join('');
-  if(est.semParte.length)h+=`<div style="background:var(--gray-50);border-radius:8px;padding:8px 10px;margin-bottom:8px"><div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:4px">Substituições (jogo antigo, sem parte)</div>${est.semParte.map(e=>`<div style="padding:2px 0 2px 8px;font-size:12px;color:var(--gray-600)"><span style="color:var(--gray-400);display:inline-block;min-width:44px">${_fmtMinSeg(e)}</span>🔄 ${_subTexto(e)}</div>`).join('')}</div>`;
+  if(est.semParte.length)h+=`<div style="background:var(--gray-50);border-radius:8px;padding:8px 10px;margin-bottom:8px"><div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:4px">Eventos sem parte registada (jogo antigo)</div>${est.semParte.map(_htmlEvLinha).join('')}</div>`;
   return h;
 }
 function updatePartesConfig(){
@@ -3885,7 +3874,7 @@ function regEvento(tipo){
     jogoState.defesas++;
     if(!jogoState.defesasJog[grEmCampo.id])jogoState.defesasJog[grEmCampo.id]=0;
     jogoState.defesasJog[grEmCampo.id]++;
-    jogoState.eventos.push({tipo:'defesa',min,jid:grEmCampo.id,desc:'Defesa GR — '+grEmCampo.nome.split(' ')[0],icon:'🛡️',ts:Date.now(),parte:jogoState.parteAtual});
+    jogoState.eventos.push({tipo:'defesa',min,jid:grEmCampo.id,desc:'Defesa GR — '+grEmCampo.nome.split(' ')[0],icon:'🛡️',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
     renderJogoAoVivo();
     toast('🛡️ Defesa de '+grEmCampo.nome.split(' ')[0]+' registada!');
     return;
@@ -3920,7 +3909,7 @@ function togglePowerPlay(tipo){
     pp.ativo=true;
     pp.inicio=jogoState.timerSec;
     const label=tipo==='favor'?'PP a Favor':'PP Contra';
-    jogoState.eventos.push({tipo:'pp-inicio-'+tipo,min,desc:label+' — Início',icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual});
+    jogoState.eventos.push({tipo:'pp-inicio-'+tipo,min,desc:label+' — Início',icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
     btn.textContent=tipo==='favor'?'⚡ PP a Favor — Terminar':'⚡ PP Contra — Terminar';
     btn.style.background=tipo==='favor'?'#059669':'#DC2626';
     btn.style.color='#fff';
@@ -3939,7 +3928,7 @@ function togglePowerPlay(tipo){
     }).length>0;
     pp.lista.push({inicio:pp.inicio,fim:jogoState.timerSec,durSec,goloNoPP});
     pp.inicio=null;
-    jogoState.eventos.push({tipo:'pp-fim-'+tipo,min,desc:label+` — Fim (${durMin}'${String(durSegR).padStart(2,'0')}'')`,icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual});
+    jogoState.eventos.push({tipo:'pp-fim-'+tipo,min,desc:label+` — Fim (${durMin}'${String(durSegR).padStart(2,'0')}'')`,icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
     if(tipo==='favor'){
       btn.textContent='⚡ PP a Favor — Iniciar';
       btn.style.background='#D1FAE5';btn.style.color='#065F46';
@@ -3958,19 +3947,19 @@ function confirmarEvento(){
   if(pendTipo==='golo'){
     jogoState.scoreH++;
     if(jid){if(!jogoState.golosJog[jid])jogoState.golosJog[jid]=0;jogoState.golosJog[jid]++;}
-    jogoState.eventos.push({tipo:'golo',min,jid,desc:'Golo'+(j?' — '+j.nome:''),icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual});
+    jogoState.eventos.push({tipo:'golo',min,jid,desc:'Golo'+(j?' — '+j.nome:''),icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
   } else if(pendTipo==='golo-s'){
     jogoState.scoreA++;
-    jogoState.eventos.push({tipo:'golo-s',min,desc:'Golo sofrido',icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual});
+    jogoState.eventos.push({tipo:'golo-s',min,desc:'Golo sofrido',icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
   } else if(pendTipo==='sub'){
     const jidSai=document.getElementById('evento-jog-sai')?.value;
     const jSai=jidSai?DB.jogadores.find(x=>x.id===jidSai):null;
     // Remove quem sai primeiro, depois adiciona quem entra
     if(jidSai) jogoState.emCampo=jogoState.emCampo.filter(x=>x!==jidSai);
     if(jid&&!jogoState.emCampo.includes(jid)){jogoState.emCampo.push(jid);if(!jogoState.tempos[jid])jogoState.tempos[jid]=0;}
-    jogoState.eventos.push({tipo:'sub',min,seg:jogoState.timerSec,jid,jidSai:jidSai||null,desc:'Sub — '+(j?j.nome:'?')+' entra'+(jSai?' / '+jSai.nome+' sai':''),icon:'🔄',ts:Date.now(),parte:jogoState.parteAtual});
+    jogoState.eventos.push({tipo:'sub',min,jid,jidSai:jidSai||null,desc:'Sub — '+(j?j.nome:'?')+' entra'+(jSai?' / '+jSai.nome+' sai':''),icon:'🔄',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
   } else {
-    jogoState.eventos.push({tipo:pendTipo,min,jid,desc:(pendTipo==='falta'?'Falta':pendTipo==='amarelo'?'Amarelo':pendTipo==='azul'?'Azul':'Vermelho')+(j?' — '+j.nome:''),icon:icons[pendTipo],ts:Date.now(),parte:jogoState.parteAtual});
+    jogoState.eventos.push({tipo:pendTipo,min,jid,desc:(pendTipo==='falta'?'Falta':pendTipo==='amarelo'?'Amarelo':pendTipo==='azul'?'Azul':'Vermelho')+(j?' — '+j.nome:''),icon:icons[pendTipo],ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
   }
   closeModal('modal-evento');renderJogoAoVivo();
   document.getElementById('sc-home').textContent=jogoState.scoreH;
@@ -4077,7 +4066,7 @@ function verJogo(id){
     const t=tempos[jg.id]||0,pct=Math.min(Math.round(t/durTotal*100),100),mins=Math.floor(t/60);
     const golos=golosJog[jg.id]||0;
     return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px">
-      <div style="width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${jg.nome.split(' ')[0]}</div>
+      <div style="width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_jogNome(jg.id)}</div>
       <div style="flex:1;background:var(--gray-100);border-radius:4px;height:10px"><div style="width:${pct}%;background:#10B981;height:10px;border-radius:4px"></div></div>
       <div style="width:28px;text-align:right;color:var(--gray-600)">${mins}'</div>
       ${estP.partesComTit?`<div style="width:34px;text-align:right;font-size:10px;color:${estP.titularCount[jg.id]?'#1E40AF':'var(--gray-400)'}" title="Partes como titular">▶${estP.titularCount[jg.id]||0}/${estP.partesComTit}</div>`:''}
@@ -4085,7 +4074,7 @@ function verJogo(id){
     </div>`;
   }).join(''):'';
   // GR defesas
-  const grDefHtml=Object.entries(defesasJog).map(([jid,n])=>{const jg=DB.jogadores.find(x=>x.id===jid);return jg?`<span style="font-weight:700">${jg.nome.split(' ')[0]}</span> ×${n}`:''}).filter(Boolean).join(', ')||'—';
+  const grDefHtml=Object.entries(defesasJog).map(([jid,n])=>{const jg=DB.jogadores.find(x=>x.id===jid);return jg?`<span style="font-weight:700">${_jogNome(jid)}</span> ×${n}`:''}).filter(Boolean).join(', ')||'—';
   // Golos por minuto
   const golosMinsHtml=goloEvs.map(e=>{const jg=e.jid?DB.jogadores.find(x=>x.id===e.jid):null;return`<div style="padding:3px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span style="color:var(--gray-400);font-size:11px">${e.min}'</span> ⚽ <strong>${jg?jg.nome.split(' ')[0]:'—'}</strong></div>`;}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sem golos</div>';
   // Substituições
@@ -4131,14 +4120,9 @@ function verJogo(id){
       <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:8px">⏱ Tempo em Campo</div>
       ${barrasHtml}
     </div>
-    <!-- Golos -->
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:6px">⚽ Golos</div>
-      ${golosMinsHtml}
-    </div>
     <!-- Substituições -->
     <div>
-      <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:6px">▶️ Cinco inicial e 🔄 substituições por parte</div>
+      <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:6px">📋 Desenrolar do jogo por parte</div>
       ${subHtml}
     </div>
   </div>`;
@@ -6509,7 +6493,7 @@ async function gerarPDFJogador(){
         doc.text(jg.score_h+'—'+jg.score_a,margin+90,y);
         doc.setTextColor(...GRAY);doc.setFont('helvetica','normal');
         doc.text(mins+"'",margin+105,y);
-        if(golos>0){doc.setTextColor(...RED);doc.text('⚽×'+golos,margin+118,y);}
+        if(golos>0){doc.setTextColor(...RED);doc.text(golos+(golos>1?' golos':' golo'),margin+118,y);}
         if(defesas>0){doc.setTextColor(37,99,235);doc.text('🛡️×'+defesas,margin+133,y);}
         y+=5;
       });
