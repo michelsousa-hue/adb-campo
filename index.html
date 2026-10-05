@@ -359,6 +359,7 @@ textarea.form-input{resize:vertical;min-height:70px}
       <div class="nav-item" data-page="convocatoria"><span class="nav-icon">📣</span>Convocatória</div>
       <div class="nav-section">Jogo</div>
       <div class="nav-item" data-page="jogo"><span class="nav-icon">🏒</span>Jogo ao Vivo</div>
+      <div class="nav-item" data-page="analise-jogos"><span class="nav-icon">📊</span>Análise de Jogos</div>
     </nav>
     <main class="main">
       <div id="page-dashboard" class="page active">
@@ -605,6 +606,16 @@ textarea.form-input{resize:vertical;min-height:70px}
           </div>
           <div id="conv-preview-wrap"></div>
         </div>
+      </div>
+      <div id="page-analise-jogos" class="page">
+        <div class="page-header">
+          <div><div class="page-title">Análise de Jogos</div><div class="page-sub">+/- por jogador, combinações e duplas — atualizado com todos os jogos guardados</div></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select class="form-input" id="aj-grupo" style="width:auto" onchange="renderAnaliseJogos(true)"></select>
+            <button class="btn btn-sm" onclick="renderAnaliseJogos(false,true)">↻ Atualizar</button>
+          </div>
+        </div>
+        <div id="aj-conteudo"><div class="empty-state"><div class="empty-state-text">A carregar jogos…</div></div></div>
       </div>
       <div id="page-jogo" class="page">
         <div class="page-header">
@@ -1977,7 +1988,7 @@ document.getElementById('sidebar').addEventListener('click',e=>{
   const el=e.target.closest('.nav-item[data-page]'); if(el)navGo(el);
 });
 function renderPage(p){
-  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();},inscricoes:renderInscricoes,biblioteca:renderBiblioteca,'planos-treino':renderPlanosTreino,mensalidades:renderMensalidades};
+  const map={dashboard:renderDashboard,presencas:renderPresencas,jogadores:renderJogadores,sessoes:renderSessoes,ficha:renderFichaPage,avaliacao:renderAvaliacao,relatorio:renderRelatorio,convocatoria:renderConvocatoria,jogo:renderJogoAoVivo,'analise-jogos':()=>renderAnaliseJogos(false,true),admin:renderAdmin,treinos:renderTreinos,metodologia:renderMetodologia,socios:renderSocios,comunicados:()=>{},caixa:()=>{renderCaixa();renderFacturas();},inscricoes:renderInscricoes,biblioteca:renderBiblioteca,'planos-treino':renderPlanosTreino,mensalidades:renderMensalidades};
   if(map[p])map[p]();
 }
 const ORFAOS_KEY='__orfaos__';
@@ -3874,7 +3885,7 @@ function regEvento(tipo){
     jogoState.defesas++;
     if(!jogoState.defesasJog[grEmCampo.id])jogoState.defesasJog[grEmCampo.id]=0;
     jogoState.defesasJog[grEmCampo.id]++;
-    jogoState.eventos.push({tipo:'defesa',min,jid:grEmCampo.id,desc:'Defesa GR — '+grEmCampo.nome.split(' ')[0],icon:'🛡️',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
+    jogoState.eventos.push({tipo:'defesa',min,jid:grEmCampo.id,desc:'Defesa GR — '+grEmCampo.nome.split(' ')[0],icon:'🛡️',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg(),emCampo:[...jogoState.emCampo]});
     renderJogoAoVivo();
     toast('🛡️ Defesa de '+grEmCampo.nome.split(' ')[0]+' registada!');
     return;
@@ -3909,7 +3920,7 @@ function togglePowerPlay(tipo){
     pp.ativo=true;
     pp.inicio=jogoState.timerSec;
     const label=tipo==='favor'?'PP a Favor':'PP Contra';
-    jogoState.eventos.push({tipo:'pp-inicio-'+tipo,min,desc:label+' — Início',icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
+    jogoState.eventos.push({tipo:'pp-inicio-'+tipo,min,desc:label+' — Início',icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg(),emCampo:[...jogoState.emCampo]});
     btn.textContent=tipo==='favor'?'⚡ PP a Favor — Terminar':'⚡ PP Contra — Terminar';
     btn.style.background=tipo==='favor'?'#059669':'#DC2626';
     btn.style.color='#fff';
@@ -3928,7 +3939,7 @@ function togglePowerPlay(tipo){
     }).length>0;
     pp.lista.push({inicio:pp.inicio,fim:jogoState.timerSec,durSec,goloNoPP});
     pp.inicio=null;
-    jogoState.eventos.push({tipo:'pp-fim-'+tipo,min,desc:label+` — Fim (${durMin}'${String(durSegR).padStart(2,'0')}'')`,icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
+    jogoState.eventos.push({tipo:'pp-fim-'+tipo,min,desc:label+` — Fim (${durMin}'${String(durSegR).padStart(2,'0')}'')`,icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg(),emCampo:[...jogoState.emCampo]});
     if(tipo==='favor'){
       btn.textContent='⚡ PP a Favor — Iniciar';
       btn.style.background='#D1FAE5';btn.style.color='#065F46';
@@ -3947,19 +3958,19 @@ function confirmarEvento(){
   if(pendTipo==='golo'){
     jogoState.scoreH++;
     if(jid){if(!jogoState.golosJog[jid])jogoState.golosJog[jid]=0;jogoState.golosJog[jid]++;}
-    jogoState.eventos.push({tipo:'golo',min,jid,desc:'Golo'+(j?' — '+j.nome:''),icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
+    jogoState.eventos.push({tipo:'golo',min,jid,desc:'Golo'+(j?' — '+j.nome:''),icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg(),emCampo:[...jogoState.emCampo]});
   } else if(pendTipo==='golo-s'){
     jogoState.scoreA++;
-    jogoState.eventos.push({tipo:'golo-s',min,desc:'Golo sofrido',icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
+    jogoState.eventos.push({tipo:'golo-s',min,desc:'Golo sofrido',icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg(),emCampo:[...jogoState.emCampo]});
   } else if(pendTipo==='sub'){
     const jidSai=document.getElementById('evento-jog-sai')?.value;
     const jSai=jidSai?DB.jogadores.find(x=>x.id===jidSai):null;
     // Remove quem sai primeiro, depois adiciona quem entra
     if(jidSai) jogoState.emCampo=jogoState.emCampo.filter(x=>x!==jidSai);
     if(jid&&!jogoState.emCampo.includes(jid)){jogoState.emCampo.push(jid);if(!jogoState.tempos[jid])jogoState.tempos[jid]=0;}
-    jogoState.eventos.push({tipo:'sub',min,jid,jidSai:jidSai||null,desc:'Sub — '+(j?j.nome:'?')+' entra'+(jSai?' / '+jSai.nome+' sai':''),icon:'🔄',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
+    jogoState.eventos.push({tipo:'sub',min,jid,jidSai:jidSai||null,desc:'Sub — '+(j?j.nome:'?')+' entra'+(jSai?' / '+jSai.nome+' sai':''),icon:'🔄',ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg(),emCampo:[...jogoState.emCampo]});
   } else {
-    jogoState.eventos.push({tipo:pendTipo,min,jid,desc:(pendTipo==='falta'?'Falta':pendTipo==='amarelo'?'Amarelo':pendTipo==='azul'?'Azul':'Vermelho')+(j?' — '+j.nome:''),icon:icons[pendTipo],ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg()});
+    jogoState.eventos.push({tipo:pendTipo,min,jid,desc:(pendTipo==='falta'?'Falta':pendTipo==='amarelo'?'Amarelo':pendTipo==='azul'?'Azul':'Vermelho')+(j?' — '+j.nome:''),icon:icons[pendTipo],ts:Date.now(),parte:jogoState.parteAtual,seg:e_seg(),emCampo:[...jogoState.emCampo]});
   }
   closeModal('modal-evento');renderJogoAoVivo();
   document.getElementById('sc-home').textContent=jogoState.scoreH;
@@ -4009,6 +4020,125 @@ async function guardarJogo(){
   DB.jogos.push(jogo);
   toast('✅ Jogo guardado!');showSync();
   renderHistoricoJogos();
+}
+// ═══ ANÁLISE DE JOGOS (combinações) ═══
+let ajState={excluidos:{},minTempo:2,ordem:{jog:'pm',cinco:'saldo',dupla:'saldo'},vistaComb:'dupla'};
+// Reconstrói, para um jogo, os períodos com cada grupo em campo e os golos com quem estava em campo
+function reconstruirJogo(j){
+  const eventos=(j.eventos||[]).map((e,i)=>({...e,_i:i})).sort((a,b)=>((a.ts||0)-(b.ts||0))||(a._i-b._i));
+  const durParte=(j.dur_parte||8)*60;
+  const segmentos=[],golos=[];let partesOk=0,partesSemDados=0;
+  const maxParte=Math.max(j.num_partes||0,0,...eventos.map(e=>e.parte||0));
+  for(let p=1;p<=maxParte;p++){
+    const evs=eventos.filter(e=>e.parte===p);
+    const ini=evs.find(e=>e.tipo==='inicio-parte');
+    if(!ini){if(evs.length)partesSemDados++;continue;}
+    partesOk++;
+    let L=[...(ini.jids||[])],t=0;
+    evs.forEach(e=>{
+      if(e.tipo==='sub'){
+        const s=e.seg!=null?e.seg:t;
+        if(s>t){segmentos.push({jids:[...L],dur:s-t});t=s;}
+        if(Array.isArray(e.emCampo))L=[...e.emCampo];
+        else{if(e.jidSai)L=L.filter(x=>x!==e.jidSai);if(e.jid&&!L.includes(e.jid))L.push(e.jid);}
+      } else if(e.tipo==='golo'||e.tipo==='golo-s'){
+        golos.push({tipo:e.tipo,jids:Array.isArray(e.emCampo)?[...e.emCampo]:[...L]});
+      }
+    });
+    const fim=Math.max(durParte,t);
+    if(fim>t)segmentos.push({jids:[...L],dur:fim-t});
+  }
+  return{segmentos,golos,partesOk,partesSemDados};
+}
+function _combos(arr,k){const r=[];const f=(s,i)=>{if(s.length===k){r.push([...s]);return;}for(let x=i;x<arr.length;x++){s.push(arr[x]);f(s,x+1);s.pop();}};f([],0);return r;}
+function analisarJogos(jogos){
+  const jog={},cinco={},dupla={},trio={};
+  const add=(map,key,ids,dur,gm,gs,jid)=>{const o=map[key]||(map[key]={ids,tempo:0,gm:0,gs:0,jogos:new Set()});o.tempo+=dur;o.gm+=gm;o.gs+=gs;if(jid)o.jogos.add(jid);};
+  const campo=ids=>ids.filter(id=>!_jogIsGR(id)).sort();
+  let semDados=0;
+  jogos.forEach(j=>{
+    const r=reconstruirJogo(j);
+    if(!r.partesOk){semDados++;return;}
+    const est=estruturaPartes(j.eventos||[],j.num_partes);
+    Object.entries(est.titularCount).forEach(([id,n])=>{const o=jog[id]||(jog[id]={ids:[id],tempo:0,gm:0,gs:0,jogos:new Set(),tit:0});o.tit=(o.tit||0)+n;});
+    const reg=(ids,dur,gm,gs)=>{
+      ids.forEach(id=>{const o=jog[id]||(jog[id]={ids:[id],tempo:0,gm:0,gs:0,jogos:new Set(),tit:0});o.tempo+=dur;o.gm+=gm;o.gs+=gs;o.jogos.add(j.id);});
+      const sorted=[...ids].sort();add(cinco,sorted.join('|'),sorted,dur,gm,gs,j.id);
+      const fc=campo(ids);
+      _combos(fc,2).forEach(cb=>add(dupla,cb.join('|'),cb,dur,gm,gs,j.id));
+      _combos(fc,3).forEach(cb=>add(trio,cb.join('|'),cb,dur,gm,gs,j.id));
+    };
+    r.segmentos.forEach(s=>reg(s.jids,s.dur,0,0));
+    r.golos.forEach(g=>reg(g.jids,0,g.tipo==='golo'?1:0,g.tipo==='golo-s'?1:0));
+  });
+  return{jog,cinco,dupla,trio,semDados};
+}
+function _ajFmtT(s){const m=Math.floor(s/60);return m+"'"+String(Math.round(s%60)).padStart(2,'0')+"''";}
+function _ajRate(n,t){return t>0?(n/(t/60)*10).toFixed(1):'—';}
+function _ajSaldo(n){return`<strong style="color:${n>0?'#059669':n<0?'#DC2626':'var(--gray-500)'}">${n>0?'+':''}${n}</strong>`;}
+function _ajSort(list,k){
+  const f={pm:o=>o.gm-o.gs,saldo:o=>o.gm-o.gs,tempo:o=>o.tempo,gm:o=>o.gm,gs:o=>-o.gs,gm10:o=>o.tempo?o.gm/o.tempo:0,gs10:o=>o.tempo?-o.gs/o.tempo:0,tit:o=>o.tit||0}[k]||(o=>o.gm-o.gs);
+  return list.sort((a,b)=>(f(b)-f(a))||(b.tempo-a.tempo));
+}
+function _ajTh(tab,k,lab,tip){const a=ajState.ordem[tab]===k;return`<th style="cursor:pointer;white-space:nowrap;${a?'color:var(--red)':''}" title="${tip||'Ordenar'}" onclick="ajState.ordem['${tab}']='${k}';renderAnaliseJogos()">${lab}${a?' ▾':''}</th>`;}
+function _ajNomes(ids,sep){return _titularesOrdenados(ids).map(id=>(_jogIsGR(id)?'🧤 ':'')+_jogNome(id)).join(sep||', ');}
+async function renderAnaliseJogos(mudouGrupo,recarregar){
+  const out=document.getElementById('aj-conteudo');if(!out)return;
+  if(recarregar){out.innerHTML='<div class="empty-state"><div class="empty-state-text">A carregar jogos…</div></div>';await loadJogos();}
+  const todos=DB.jogos||[];
+  const sel=document.getElementById('aj-grupo');
+  const grupos=[...new Set(todos.map(j=>j.grupo).filter(Boolean))];
+  const atual=sel.value&&(sel.value==='__todos__'||grupos.includes(sel.value))?sel.value:(grupos[0]||'__todos__');
+  sel.innerHTML=grupos.map(g=>`<option value="${g}" ${g===atual?'selected':''}>${g}</option>`).join('')+`<option value="__todos__" ${atual==='__todos__'?'selected':''}>Todos os escalões</option>`;
+  const doGrupo=todos.filter(j=>atual==='__todos__'||j.grupo===atual);
+  if(!doGrupo.length){out.innerHTML='<div class="card"><div class="empty-state"><div class="empty-state-text">Ainda não há jogos guardados neste escalão.</div></div></div>';return;}
+  const incl=doGrupo.filter(j=>!ajState.excluidos[j.id]);
+  const A=analisarJogos(incl);
+  const minT=ajState.minTempo*60;
+  const analisados=incl.filter(j=>reconstruirJogo(j).partesOk>0);
+  const gmTot=analisados.reduce((a,j)=>a+(j.score_h||0),0),gsTot=analisados.reduce((a,j)=>a+(j.score_a||0),0);
+
+  // Jogos incluídos
+  const jogosHtml=doGrupo.map(j=>{const r=reconstruirJogo(j);const ok=r.partesOk>0;return`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--gray-100);cursor:pointer">
+    <input type="checkbox" ${ajState.excluidos[j.id]?'':'checked'} onchange="ajState.excluidos['${j.id}']=!this.checked;renderAnaliseJogos()">
+    <span style="flex:1"><strong>${j.adversario}</strong> <span style="color:var(--gray-400)">${fmtDate(j.data)}</span></span>
+    <span class="badge ${j.score_h>j.score_a?'badge-ok':j.score_h<j.score_a?'badge-danger':'badge-gray'}">${j.score_h} — ${j.score_a}</span>
+    ${ok?'':'<span style="font-size:10px;color:#B45309" title="Jogo gravado antes de existir o registo do cinco inicial">⚠️ sem cinco inicial</span>'}</label>`;}).join('');
+
+  // Jogadores
+  const jogList=_ajSort(Object.values(A.jog).filter(o=>o.tempo>0||o.gm||o.gs),ajState.ordem.jog);
+  const tabJog=jogList.length?`<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Jogador</th>${_ajTh('jog','tempo','Tempo')}${_ajTh('jog','tit','Tit.','Partes como titular')}${_ajTh('jog','gm','GM','Golos marcados com o jogador em campo')}${_ajTh('jog','gs','GS','Golos sofridos com o jogador em campo')}${_ajTh('jog','pm','+/-')}${_ajTh('jog','gm10',"GM/10'",'Golos marcados por cada 10 min em campo')}${_ajTh('jog','gs10',"GS/10'",'Golos sofridos por cada 10 min em campo')}</tr></thead><tbody>${jogList.map(o=>{const id=o.ids[0];return`<tr><td style="white-space:nowrap">${_jogIsGR(id)?'🧤 ':''}<strong>${_jogNome(id)}</strong></td><td>${_ajFmtT(o.tempo)}</td><td>${o.tit||0}</td><td>${o.gm}</td><td>${o.gs}</td><td>${_ajSaldo(o.gm-o.gs)}</td><td>${_ajRate(o.gm,o.tempo)}</td><td>${_ajRate(o.gs,o.tempo)}</td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-state-text">Sem dados</div></div>';
+
+  // Combinações
+  const vista=ajState.vistaComb;
+  const mapa=vista==='cinco'?A.cinco:vista==='trio'?A.trio:A.dupla;
+  const tabKey=vista==='cinco'?'cinco':'dupla';
+  const combList=_ajSort(Object.values(mapa).filter(o=>o.tempo>=minT),ajState.ordem[tabKey]).slice(0,40);
+  const ocultas=Object.values(mapa).filter(o=>o.tempo<minT).length;
+  const tabComb=combList.length?`<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>${vista==='cinco'?'Cinco em campo':vista==='trio'?'Trio':'Dupla'}</th>${_ajTh(tabKey,'tempo','Tempo junto')}<th>Jogos</th>${_ajTh(tabKey,'gm','GM')}${_ajTh(tabKey,'gs','GS')}${_ajTh(tabKey,'saldo','Saldo')}${_ajTh(tabKey,'gm10',"GM/10'")}${_ajTh(tabKey,'gs10',"GS/10'")}</tr></thead><tbody>${combList.map(o=>`<tr><td style="font-size:12px;min-width:180px">${_ajNomes(o.ids,vista==='cinco'?', ':' + ')}</td><td>${_ajFmtT(o.tempo)}</td><td>${o.jogos.size}</td><td>${o.gm}</td><td>${o.gs}</td><td>${_ajSaldo(o.gm-o.gs)}</td><td>${_ajRate(o.gm,o.tempo)}</td><td>${_ajRate(o.gs,o.tempo)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-state-text">Nenhuma combinação com o tempo mínimo escolhido</div></div>';
+  const btnV=(k,l)=>`<button class="btn btn-sm" style="${vista===k?'background:var(--red);color:#fff;border-color:var(--red)':''}" onclick="ajState.vistaComb='${k}';renderAnaliseJogos()">${l}</button>`;
+
+  out.innerHTML=`
+    <div class="metrics-grid" style="margin-bottom:12px">
+      <div class="metric-card"><div class="metric-label">Jogos analisados</div><div class="metric-value">${incl.length-A.semDados}</div><div class="metric-sub">${A.semDados?A.semDados+' sem cinco inicial (excluídos)':'de '+doGrupo.length+' no escalão'}</div></div>
+      <div class="metric-card"><div class="metric-label">Golos marcados</div><div class="metric-value" style="color:#059669">${gmTot}</div></div>
+      <div class="metric-card"><div class="metric-label">Golos sofridos</div><div class="metric-value" style="color:#DC2626">${gsTot}</div></div>
+      <div class="metric-card"><div class="metric-label">Saldo</div><div class="metric-value">${_ajSaldo(gmTot-gsTot)}</div></div>
+    </div>
+    <div class="card"><div class="card-title">👤 Jogadores — +/- em campo</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">+1 por cada golo marcado e −1 por cada golo sofrido enquanto o jogador estava em campo. Carrega nos títulos das colunas para ordenar.</div>
+      ${tabJog}</div>
+    <div class="card"><div class="card-title">🤝 Combinações</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        ${btnV('dupla','Duplas')}${btnV('trio','Trios')}${btnV('cinco','Cinco completo')}
+        <span style="margin-left:auto;font-size:12px;color:var(--gray-500)">Tempo mínimo junto:
+          <select class="form-input" style="width:auto;display:inline-block;padding:4px 8px" onchange="ajState.minTempo=parseInt(this.value);renderAnaliseJogos()">${[0,1,2,3,5,8].map(m=>`<option value="${m}" ${ajState.minTempo===m?'selected':''}>${m} min</option>`).join('')}</select></span>
+      </div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">${vista==='cinco'?'Inclui o GR.':'Só jogadores de campo (sem GR).'} ${ocultas?ocultas+' combinação(ões) com menos de '+ajState.minTempo+' min escondida(s).':''}</div>
+      ${tabComb}</div>
+    <div class="card"><div class="card-title">🏒 Jogos incluídos</div>${jogosHtml}
+      <div style="font-size:11px;color:var(--gray-500);margin-top:8px">Desmarca um jogo para o tirar da análise (não apaga nada).</div></div>
+    <div style="font-size:11px;color:var(--gray-400);margin:4px 2px 16px">Nota: com poucos jogos os números oscilam muito — lê como tendência. Os golos em power play contam como os restantes.</div>`;
 }
 async function loadJogos(){
   try{
