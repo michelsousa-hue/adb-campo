@@ -3367,9 +3367,10 @@ function renderJogoAoVivo(){
   if(btnDefesa){btnDefesa.disabled=!grEmCampo;btnDefesa.style.opacity=grEmCampo?'1':'0.4';btnDefesa.title=grEmCampo?'Defesa do GR '+grEmCampo.nome:'Coloca o GR em campo primeiro';}
   document.getElementById('eventos-list').innerHTML=[...jogoState.eventos].reverse().slice(0,30).map((e,i)=>{
     const realIdx=jogoState.eventos.length-1-i;
+    if(e.tipo==='inicio-parte')return`<div class="evento-row" style="background:var(--gray-50);border-radius:6px;padding:4px 6px"><span>${e.icon}</span><span style="font-weight:600;font-size:12px">${e.desc}</span></div>`;
     return`<div class="evento-row" style="justify-content:space-between"><div style="display:flex;gap:8px;align-items:center"><span class="evento-min">${e.min}'</span><span>${e.icon}</span><span>${e.desc}</span></div><button onclick="removerEvento(${realIdx})" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:14px;padding:0 4px;flex-shrink:0" title="Remover">×</button></div>`;
   }).join('')||'<div class="empty-state"><div class="empty-state-text">Sem eventos</div></div>';
-  const dur=parseInt(document.getElementById('jogo-dur')?.value||50)*60;
+  const dur=Math.max(jogoState.numPartes*jogoState.durParte*60,1);
   document.getElementById('jogo-tempos').innerHTML=jogs.length?[...jogs].sort((a,b)=>(jogoState.tempos[b.id]||0)-(jogoState.tempos[a.id]||0)).map(j=>{const t=jogoState.tempos[j.id]||0,pct=Math.min(Math.round(t/dur*100),100),mins=Math.floor(t/60);return`<div class="bar-row"><div class="bar-label">${j.nome.split(' ')[0]}</div><div class="bar-track"><div class="bar-fill fill-green" style="width:${pct}%"></div></div><div class="bar-val">${mins}'</div></div>`;}).join(''):'';
 
   // ── Status PP ──
@@ -3440,7 +3441,7 @@ function renderJogoAoVivo(){
           ${defesasArr.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100)">'+defesasArr.map(d=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><strong>${d.nome}</strong><span style="font-weight:700;color:#2563EB">×${d.n}</span></div>`).join('')+'</div>':''}
         </div>
       </div>
-      ${subEvs.length?`<div class="card" style="margin:0"><div class="card-title" style="margin-bottom:8px">🔄 Substituições</div>${subEvs.join('')}</div>`:''}`;
+      ${(subEvs.length||jogoState.eventos.some(e=>e.tipo==='inicio-parte'))?`<div class="card" style="margin:0"><div class="card-title" style="margin-bottom:8px">▶️ Cinco inicial e 🔄 substituições</div>${htmlPartes(jogoState.eventos,jogoState.numPartes)}</div>`:''}`;
   }
 }
 async function gerarPDFJogo(){
@@ -3465,7 +3466,9 @@ async function gerarPDFJogo(){
     doc.setFontSize(15);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
     doc.text('RELATÓRIO DE JOGO',W/2-9,y+10,{align:'left'});
     doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-    doc.text(g+' · '+new Date().toLocaleDateString('pt-PT'),W/2-9,y+17,{align:'left'});
+    const _dJ=jogoState._dataJogo||document.getElementById('jogo-data')?.value;
+    const _hJ=jogoState._horaJogo!==undefined?jogoState._horaJogo:document.getElementById('jogo-hora')?.value;
+    doc.text(g+' · '+(_dJ?fmtDate(_dJ):new Date().toLocaleDateString('pt-PT'))+(_hJ?' · '+String(_hJ).slice(0,5):''),W/2-9,y+17,{align:'left'});
     y+=28;
 
     // ── Resultado em destaque ──
@@ -3513,6 +3516,7 @@ async function gerarPDFJogo(){
     const golosJog=jogoState.golosJog||{};
     const defesasJog=jogoState.defesasJog||{};
     const jogadores=DB.jogadores.filter(x=>Object.keys(tempos).includes(x.id)).sort((a,b)=>(tempos[b.id]||0)-(tempos[a.id]||0));
+    const estP=estruturaPartes(jogoState.eventos,jogoState.numPartes);
 
     // ── Tempo em Campo (barras) ──
     if(jogadores.length){
@@ -3520,7 +3524,7 @@ async function gerarPDFJogo(){
       doc.text('⏱ Tempo em Campo',margin,y);
       doc.setDrawColor(...GRAY);doc.setLineWidth(0.3);doc.line(margin,y+1,W-margin,y+1);
       y+=7;
-      const barX=margin+28,barW=cW-28-20,barH=4;
+      const barX=margin+28,barW=cW-28-34,barH=4;
       jogadores.forEach(function(jg){
         if(y>272){doc.addPage();y=16;}
         const t=tempos[jg.id]||0,pct=Math.min(t/Math.max(durTotal,1),1),mins=Math.floor(t/60);
@@ -3536,7 +3540,8 @@ async function gerarPDFJogo(){
         doc.setFontSize(7);doc.setTextColor(...GRAY);
         doc.text(mins+"'",barX+barW+2,y+3);
         // Golos
-        if(golos>0){doc.setTextColor(...RED);doc.setFont('helvetica','bold');doc.text('⚽×'+golos,barX+barW+12,y+3);}
+        if(estP.partesComTit){doc.setFont('helvetica','normal');doc.setTextColor(...BLUE);doc.text('Tit. '+(estP.titularCount[jg.id]||0)+'/'+estP.partesComTit,barX+barW+10,y+3);}
+        if(golos>0){doc.setTextColor(...RED);doc.setFont('helvetica','bold');doc.text(golos+(golos>1?' golos':' golo'),barX+barW+22,y+3);}
         y+=7;
       });
       y+=4;
@@ -3605,21 +3610,42 @@ async function gerarPDFJogo(){
       y+=8;
     }
 
-    // ── Substituições ──
-    if(subEvs.length){
-      if(y>260){doc.addPage();y=16;}
-      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...GRAY);
-      doc.text('Substituições',margin,y);
+    // ── Cinco inicial e substituições por parte ──
+    if(estP.partes.length||estP.semParte.length){
+      if(y>255){doc.addPage();y=16;}
+      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
+      doc.text('Cinco inicial e substituições',margin,y);
       doc.setDrawColor(...GRAY);doc.setLineWidth(0.4);doc.line(margin,y+1,W-margin,y+1);
       y+=6;
-      subEvs.forEach(function(e){
+      const linhaSub=function(e){
         if(y>272){doc.addPage();y=16;}
         doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-        doc.text(e.min+"'",margin+2,y);
+        doc.text(_fmtMinSeg(e),margin+4,y);
         doc.setTextColor(...DARK);
-        doc.text(e.desc,margin+12,y);
-        y+=5;
+        doc.text('Sub: '+_subTexto(e),margin+18,y);
+        y+=4.5;
+      };
+      estP.partes.forEach(function(pt){
+        if(y>262){doc.addPage();y=16;}
+        doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
+        doc.text(pt.parte+'ª Parte',margin+2,y);
+        y+=4.5;
+        const tit=pt.titulares?(pt.titulares.length?_titularesOrdenados(pt.titulares).map(function(id){return _jogNome(id)+(_jogIsGR(id)?' (GR)':'');}).join(', '):'ninguém em campo'):'não registado';
+        doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
+        doc.text('Cinco inicial:',margin+4,y);
+        doc.setFont('helvetica','normal');
+        const tl=doc.splitTextToSize(tit,cW-30);
+        doc.text(tl,margin+26,y);
+        y+=4.5*tl.length;
+        if(pt.subs.length)pt.subs.forEach(linhaSub);
+        else{doc.setTextColor(...GRAY);doc.text('Sem substituições',margin+4,y);y+=4.5;}
+        y+=2;
       });
+      if(estP.semParte.length){
+        doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(...GRAY);
+        doc.text('Substituições (sem parte registada)',margin+2,y);y+=4.5;
+        estP.semParte.forEach(linhaSub);
+      }
     }
 
     // ── Footer ──
@@ -3692,7 +3718,50 @@ function toggleConvJogo(id,v){
 function toggleCampo(jid){
   if(jogoState.emCampo.includes(jid))jogoState.emCampo=jogoState.emCampo.filter(x=>x!==jid);
   else{jogoState.emCampo.push(jid);if(!jogoState.tempos[jid])jogoState.tempos[jid]=0;}
+  // Ajustar cinco inicial se a parte já arrancou mas ainda não houve substituições nesta parte
+  const ini=jogoState.eventos.find(e=>e.tipo==='inicio-parte'&&e.parte===jogoState.parteAtual);
+  if(ini&&!jogoState.eventos.some(e=>e.tipo==='sub'&&e.parte===jogoState.parteAtual)){
+    ini.jids=[...jogoState.emCampo];
+    ini.desc='Início da '+ini.parte+'ª parte — '+ini.jids.length+' em campo';
+  }
   renderJogoAoVivo();
+}
+// ═══ Estrutura por partes (cinco inicial + substituições) ═══
+function estruturaPartes(eventos,numPartes){
+  eventos=eventos||[];
+  const partes=[];
+  const maxParte=Math.max(numPartes||0,...eventos.map(e=>e.parte||0));
+  for(let p=1;p<=maxParte;p++){
+    const ini=eventos.find(e=>e.tipo==='inicio-parte'&&e.parte===p);
+    const subs=eventos.filter(e=>e.tipo==='sub'&&e.parte===p);
+    if(ini||subs.length)partes.push({parte:p,titulares:ini?ini.jids||[]:null,subs});
+  }
+  const semParte=eventos.filter(e=>e.tipo==='sub'&&!e.parte); // jogos antigos
+  const titularCount={};
+  partes.forEach(pt=>(pt.titulares||[]).forEach(id=>{titularCount[id]=(titularCount[id]||0)+1;}));
+  const partesComTit=partes.filter(pt=>pt.titulares).length;
+  return{partes,semParte,titularCount,partesComTit};
+}
+function _jogNome(id){const j=DB.jogadores.find(x=>x.id===id);return j?j.nome.split(' ')[0]:'?';}
+function _jogIsGR(id){const j=DB.jogadores.find(x=>x.id===id);return!!(j&&j.pos&&j.pos.toLowerCase().includes('guarda'));}
+function _fmtMinSeg(e){if(e.seg!=null)return Math.floor(e.seg/60)+"'"+String(e.seg%60).padStart(2,'0')+"''";return e.min+"'";}
+function _subTexto(e){
+  if(e.jidSai!==undefined)return _jogNome(e.jid)+' entra'+(e.jidSai?' · '+_jogNome(e.jidSai)+' sai':'');
+  return (e.desc||'').replace(/^Sub — /,'');
+}
+function _titularesOrdenados(ids){return[...ids].sort((a,b)=>_jogIsGR(b)-_jogIsGR(a));}
+function htmlPartes(eventos,numPartes){
+  const est=estruturaPartes(eventos,numPartes);
+  if(!est.partes.length&&!est.semParte.length)return'<div style="font-size:12px;color:var(--gray-400)">Sem registos de partes ou substituições</div>';
+  let h=est.partes.map(pt=>{
+    const tit=pt.titulares?(pt.titulares.length?_titularesOrdenados(pt.titulares).map(id=>(_jogIsGR(id)?'🧤 ':'')+'<strong>'+_jogNome(id)+'</strong>'+(_jogIsGR(id)?' <span style="font-size:10px;color:var(--gray-400)">(GR)</span>':'')).join(', '):'<span style="color:var(--gray-400)">ninguém em campo</span>'):'<span style="color:var(--gray-400)">não registado</span>';
+    const subs=pt.subs.length?pt.subs.map(e=>`<div style="padding:2px 0 2px 8px;font-size:12px;color:var(--gray-600)"><span style="color:var(--gray-400);display:inline-block;min-width:44px">${_fmtMinSeg(e)}</span>🔄 ${_subTexto(e)}</div>`).join(''):'<div style="padding:2px 0 2px 8px;font-size:11px;color:var(--gray-400)">Sem substituições</div>';
+    return`<div style="background:var(--gray-50);border-radius:8px;padding:8px 10px;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">${pt.parte}ª Parte</div>
+      <div style="font-size:12px;margin-bottom:4px">▶️ Cinco inicial: ${tit}</div>${subs}</div>`;
+  }).join('');
+  if(est.semParte.length)h+=`<div style="background:var(--gray-50);border-radius:8px;padding:8px 10px;margin-bottom:8px"><div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:4px">Substituições (jogo antigo, sem parte)</div>${est.semParte.map(e=>`<div style="padding:2px 0 2px 8px;font-size:12px;color:var(--gray-600)"><span style="color:var(--gray-400);display:inline-block;min-width:44px">${_fmtMinSeg(e)}</span>🔄 ${_subTexto(e)}</div>`).join('')}</div>`;
+  return h;
 }
 function updatePartesConfig(){
   const selNP=document.getElementById('jogo-num-partes'),inpDP=document.getElementById('jogo-dur-parte');
@@ -3749,6 +3818,9 @@ function toggleTimer(){
     document.getElementById('jogo-status').textContent='⏸ Pausado';
   } else {
     if(!jogoState.parteIniciada&&jogoState.parteAtual===1&&jogoState.timerSec===0)updatePartesConfig();
+    if(jogoState.timerSec===0&&!jogoState.eventos.some(e=>e.tipo==='inicio-parte'&&e.parte===jogoState.parteAtual)){
+      jogoState.eventos.push({tipo:'inicio-parte',parte:jogoState.parteAtual,min:0,seg:0,jids:[...jogoState.emCampo],desc:'Início da '+jogoState.parteAtual+'ª parte — '+jogoState.emCampo.length+' em campo',icon:'▶️',ts:Date.now()});
+    }
     jogoState.running=true;jogoState.parteIniciada=true;
     syncTimerBtn('⏸ Pausar');
     document.getElementById('jogo-status').innerHTML='<span class="live-dot"></span>A decorrer';
@@ -3813,7 +3885,7 @@ function regEvento(tipo){
     jogoState.defesas++;
     if(!jogoState.defesasJog[grEmCampo.id])jogoState.defesasJog[grEmCampo.id]=0;
     jogoState.defesasJog[grEmCampo.id]++;
-    jogoState.eventos.push({tipo:'defesa',min,jid:grEmCampo.id,desc:'Defesa GR — '+grEmCampo.nome.split(' ')[0],icon:'🛡️',ts:Date.now()});
+    jogoState.eventos.push({tipo:'defesa',min,jid:grEmCampo.id,desc:'Defesa GR — '+grEmCampo.nome.split(' ')[0],icon:'🛡️',ts:Date.now(),parte:jogoState.parteAtual});
     renderJogoAoVivo();
     toast('🛡️ Defesa de '+grEmCampo.nome.split(' ')[0]+' registada!');
     return;
@@ -3848,7 +3920,7 @@ function togglePowerPlay(tipo){
     pp.ativo=true;
     pp.inicio=jogoState.timerSec;
     const label=tipo==='favor'?'PP a Favor':'PP Contra';
-    jogoState.eventos.push({tipo:'pp-inicio-'+tipo,min,desc:label+' — Início',icon:'⚡',ts:Date.now()});
+    jogoState.eventos.push({tipo:'pp-inicio-'+tipo,min,desc:label+' — Início',icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual});
     btn.textContent=tipo==='favor'?'⚡ PP a Favor — Terminar':'⚡ PP Contra — Terminar';
     btn.style.background=tipo==='favor'?'#059669':'#DC2626';
     btn.style.color='#fff';
@@ -3867,7 +3939,7 @@ function togglePowerPlay(tipo){
     }).length>0;
     pp.lista.push({inicio:pp.inicio,fim:jogoState.timerSec,durSec,goloNoPP});
     pp.inicio=null;
-    jogoState.eventos.push({tipo:'pp-fim-'+tipo,min,desc:label+` — Fim (${durMin}'${String(durSegR).padStart(2,'0')}'')`,icon:'⚡',ts:Date.now()});
+    jogoState.eventos.push({tipo:'pp-fim-'+tipo,min,desc:label+` — Fim (${durMin}'${String(durSegR).padStart(2,'0')}'')`,icon:'⚡',ts:Date.now(),parte:jogoState.parteAtual});
     if(tipo==='favor'){
       btn.textContent='⚡ PP a Favor — Iniciar';
       btn.style.background='#D1FAE5';btn.style.color='#065F46';
@@ -3886,19 +3958,19 @@ function confirmarEvento(){
   if(pendTipo==='golo'){
     jogoState.scoreH++;
     if(jid){if(!jogoState.golosJog[jid])jogoState.golosJog[jid]=0;jogoState.golosJog[jid]++;}
-    jogoState.eventos.push({tipo:'golo',min,jid,desc:'Golo'+(j?' — '+j.nome:''),icon:'⚽',ts:Date.now()});
+    jogoState.eventos.push({tipo:'golo',min,jid,desc:'Golo'+(j?' — '+j.nome:''),icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual});
   } else if(pendTipo==='golo-s'){
     jogoState.scoreA++;
-    jogoState.eventos.push({tipo:'golo-s',min,desc:'Golo sofrido',icon:'⚽',ts:Date.now()});
+    jogoState.eventos.push({tipo:'golo-s',min,desc:'Golo sofrido',icon:'⚽',ts:Date.now(),parte:jogoState.parteAtual});
   } else if(pendTipo==='sub'){
     const jidSai=document.getElementById('evento-jog-sai')?.value;
     const jSai=jidSai?DB.jogadores.find(x=>x.id===jidSai):null;
     // Remove quem sai primeiro, depois adiciona quem entra
     if(jidSai) jogoState.emCampo=jogoState.emCampo.filter(x=>x!==jidSai);
     if(jid&&!jogoState.emCampo.includes(jid)){jogoState.emCampo.push(jid);if(!jogoState.tempos[jid])jogoState.tempos[jid]=0;}
-    jogoState.eventos.push({tipo:'sub',min,jid,desc:'Sub — '+(j?j.nome:'?')+' entra'+(jSai?' / '+jSai.nome+' sai':''),icon:'🔄',ts:Date.now()});
+    jogoState.eventos.push({tipo:'sub',min,seg:jogoState.timerSec,jid,jidSai:jidSai||null,desc:'Sub — '+(j?j.nome:'?')+' entra'+(jSai?' / '+jSai.nome+' sai':''),icon:'🔄',ts:Date.now(),parte:jogoState.parteAtual});
   } else {
-    jogoState.eventos.push({tipo:pendTipo,min,jid,desc:(pendTipo==='falta'?'Falta':pendTipo==='amarelo'?'Amarelo':pendTipo==='azul'?'Azul':'Vermelho')+(j?' — '+j.nome:''),icon:icons[pendTipo],ts:Date.now()});
+    jogoState.eventos.push({tipo:pendTipo,min,jid,desc:(pendTipo==='falta'?'Falta':pendTipo==='amarelo'?'Amarelo':pendTipo==='azul'?'Azul':'Vermelho')+(j?' — '+j.nome:''),icon:icons[pendTipo],ts:Date.now(),parte:jogoState.parteAtual});
   }
   closeModal('modal-evento');renderJogoAoVivo();
   document.getElementById('sc-home').textContent=jogoState.scoreH;
@@ -3999,6 +4071,7 @@ function verJogo(id){
   const eventos=j.eventos||[];
   const goloEvs=eventos.filter(e=>e.tipo==='golo');
   const subEvs=eventos.filter(e=>e.tipo==='sub');
+  const estP=estruturaPartes(eventos,j.num_partes);
   // Gráfico de barras de tempo em campo
   const barrasHtml=jogadores.length?jogadores.map(jg=>{
     const t=tempos[jg.id]||0,pct=Math.min(Math.round(t/durTotal*100),100),mins=Math.floor(t/60);
@@ -4007,6 +4080,7 @@ function verJogo(id){
       <div style="width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${jg.nome.split(' ')[0]}</div>
       <div style="flex:1;background:var(--gray-100);border-radius:4px;height:10px"><div style="width:${pct}%;background:#10B981;height:10px;border-radius:4px"></div></div>
       <div style="width:28px;text-align:right;color:var(--gray-600)">${mins}'</div>
+      ${estP.partesComTit?`<div style="width:34px;text-align:right;font-size:10px;color:${estP.titularCount[jg.id]?'#1E40AF':'var(--gray-400)'}" title="Partes como titular">▶${estP.titularCount[jg.id]||0}/${estP.partesComTit}</div>`:''}
       ${golos?`<div style="color:var(--red);font-weight:700">⚽×${golos}</div>`:'<div style="width:32px"></div>'}
     </div>`;
   }).join(''):'';
@@ -4015,7 +4089,7 @@ function verJogo(id){
   // Golos por minuto
   const golosMinsHtml=goloEvs.map(e=>{const jg=e.jid?DB.jogadores.find(x=>x.id===e.jid):null;return`<div style="padding:3px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span style="color:var(--gray-400);font-size:11px">${e.min}'</span> ⚽ <strong>${jg?jg.nome.split(' ')[0]:'—'}</strong></div>`;}).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sem golos</div>';
   // Substituições
-  const subHtml=subEvs.map(e=>`<div style="padding:3px 0;font-size:11px;color:var(--gray-600)"><span style="color:var(--gray-400)">${e.min}'</span> 🔄 ${e.desc}</div>`).join('')||'<div style="font-size:12px;color:var(--gray-400)">Sem substituições</div>';
+  const subHtml=htmlPartes(eventos,j.num_partes);
 
   // Modal rico
   const modal=document.createElement('div');
@@ -4024,7 +4098,7 @@ function verJogo(id){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div>
         <div style="font-size:18px;font-weight:700;color:var(--red)">${j.adversario}</div>
-        <div style="font-size:12px;color:var(--gray-500)">${fmtDate(j.data)} · ${j.grupo}</div>
+        <div style="font-size:12px;color:var(--gray-500)">${fmtDate(j.data)}${j.hora?' · '+String(j.hora).slice(0,5):''} · ${j.grupo}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="gerarPDFJogoHistorico('${id}')" style="background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px">⬇ PDF</button>
@@ -4064,7 +4138,7 @@ function verJogo(id){
     </div>
     <!-- Substituições -->
     <div>
-      <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:6px">🔄 Substituições</div>
+      <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:6px">▶️ Cinco inicial e 🔄 substituições por parte</div>
       ${subHtml}
     </div>
   </div>`;
@@ -4086,6 +4160,7 @@ function gerarPDFJogoHistorico(id){
   jogoState.grupo=j.grupo;
   jogoState.numPartes=j.num_partes||2;
   jogoState.durParte=j.dur_parte||15;
+  jogoState._dataJogo=j.data;jogoState._horaJogo=j.hora||'';
   // Temporariamente pôr adversário no input
   const advInp=document.getElementById('jogo-adv-inp');
   const advOld=advInp?advInp.value:'';
@@ -4094,6 +4169,7 @@ function gerarPDFJogoHistorico(id){
   // Restaurar
   setTimeout(()=>{
     Object.assign(jogoState,savedState);
+    delete jogoState._dataJogo;delete jogoState._horaJogo;
     if(advInp)advInp.value=advOld;
   },500);
 }
