@@ -630,8 +630,8 @@ textarea.form-input{resize:vertical;min-height:70px}
         <div id="historico-jogos-wrap" style="margin-bottom:14px"></div>
         <div class="grupo-tabs" id="jogo-gtabs-live"></div>
         <div class="placard">
-          <div class="placard-teams"><span>ADB Campo</span><span id="jogo-adv-lbl">Adversário</span></div>
-          <div class="placard-score"><span id="sc-home">0</span> — <span id="sc-away">0</span></div>
+          <div class="placard-teams" id="placard-teams"><span>ADB Campo</span><span id="jogo-adv-lbl">Adversário</span></div>
+          <div class="placard-score" id="placard-score"><span id="sc-home">0</span> — <span id="sc-away">0</span></div>
           <div class="placard-timer">⏱ <span id="jogo-clock">00:00</span></div>
           <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
             <button id="btn-crono-minus" onmousedown="startAjusteCrono(-1)" onmouseup="stopAjusteCrono()" onmouseleave="stopAjusteCrono()" ontouchstart="startAjusteCrono(-1)" ontouchend="stopAjusteCrono()" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:white;font-size:16px;font-weight:700;cursor:pointer">−</button>
@@ -642,6 +642,7 @@ textarea.form-input{resize:vertical;min-height:70px}
         </div>
         <div class="form-row" style="margin-bottom:14px">
           <div class="form-group"><label class="form-label">Adversário</label><input type="text" class="form-input" id="jogo-adv-inp" oninput="document.getElementById('jogo-adv-lbl').textContent=this.value||'Adversário'"></div>
+          <div class="form-group"><label class="form-label">Local</label><select class="form-input" id="jogo-local" onchange="jogoState.local=this.value;atualizarPlacardLocal()"><option value="casa">🏠 Em casa (visitados)</option><option value="fora">✈️ Fora (visitantes)</option></select></div>
           <div class="form-group"><label class="form-label">Nº de partes</label><select class="form-input" id="jogo-num-partes" onchange="updatePartesConfig()" oninput="updatePartesConfig()"><option value="2">2 partes</option><option value="4" selected>4 partes</option></select></div>
           <div class="form-group"><label class="form-label">Duração por parte (min)</label><input type="number" class="form-input" id="jogo-dur-parte" value="8" min="1" max="45" onchange="updatePartesConfig()" oninput="updatePartesConfig()"></div>
         </div>
@@ -1583,7 +1584,7 @@ const FICHA_LEGACY = {
 };
 // Ficha activa para novas avaliações (pode ser substituída em runtime)
 let fichaAtiva = FICHA_LEGACY;
-let jogoState = { scoreH:0, scoreA:0, eventos:[], emCampo:[], tempos:{}, timerSec:0, running:false, paused:false, grupo:'Sub13+Sub15', numPartes:4, durParte:8, parteAtual:1, parteIniciada:false, powerPlays:{ favor:{ ativo:false, inicio:null, lista:[] }, contra:{ ativo:false, inicio:null, lista:[] } }, defesas:0, defesasJog:{}, golosJog:{}, convocados:[] };
+let jogoState = { local:'casa', scoreH:0, scoreA:0, eventos:[], emCampo:[], tempos:{}, timerSec:0, running:false, paused:false, grupo:'Sub13+Sub15', numPartes:4, durParte:8, parteAtual:1, parteIniciada:false, powerPlays:{ favor:{ ativo:false, inicio:null, lista:[] }, contra:{ ativo:false, inicio:null, lista:[] } }, defesas:0, defesasJog:{}, golosJog:{}, convocados:[] };
 let currentUser = null;
 let currentPin = '';
 let selectedProfile = null;
@@ -2499,7 +2500,7 @@ function renderFicha(){
             return`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--gray-100);font-size:12px">
               <div><strong>\${jg.adversario}</strong> <span style="color:var(--gray-400);font-size:11px">\${fmtDate(jg.data)}</span></div>
               <div style="display:flex;gap:8px;align-items:center">
-                <span class="badge \${res}">\${jg.score_h}—\${jg.score_a}</span>
+                <span class="badge \${res}">\${resTxt(jg,'—')}</span>
                 <span style="color:var(--gray-500)">\${mins}'</span>
                 \${golos?'<span style="color:var(--red);font-weight:700">⚽×'+golos+'</span>':''}
                 \${defesas?'<span style="color:#2563EB;font-weight:700">🛡️×'+defesas+'</span>':''}
@@ -3340,6 +3341,21 @@ async function gerarPDFConvocatoria(){try{
   }
 }
 
+// ═══ CASA / FORA ═══
+// score_h = golos nossos, score_a = golos do adversário (sempre). O local só muda a ordem em que se mostra.
+function jogoFora(j){return !!j&&(j.local==='fora'||j.power_plays?.local==='fora');}
+function resTxt(j,sep=' — '){return jogoFora(j)?`${j.score_a??0}${sep}${j.score_h??0}`:`${j.score_h??0}${sep}${j.score_a??0}`;}
+function equipasTxt(j,nos='ADB Campo',sep=' vs '){return jogoFora(j)?`${j.adversario}${sep}${nos}`:`${nos}${sep}${j.adversario}`;}
+function atualizarPlacardLocal(){
+  const fora=jogoState.local==='fora';
+  const adv=document.getElementById('jogo-adv-inp')?.value||'Adversário';
+  const t=document.getElementById('placard-teams'),sc=document.getElementById('placard-score');
+  const nos='<span>ADB Campo</span>',eles=`<span id="jogo-adv-lbl"></span>`;
+  if(t){t.innerHTML=fora?eles+nos:nos+eles;document.getElementById('jogo-adv-lbl').textContent=adv;}
+  const h=`<span id="sc-home">${jogoState.scoreH}</span>`,a=`<span id="sc-away">${jogoState.scoreA}</span>`;
+  if(sc)sc.innerHTML=fora?a+' — '+h:h+' — '+a;
+}
+
 // ═══ JOGO AO VIVO ═══
 function renderJogoAoVivo(){
   renderHistoricoJogos();
@@ -3352,8 +3368,8 @@ function renderJogoAoVivo(){
   }
   const jbl=document.getElementById('jogo-gtabs-live');
   jbl.innerHTML=GRUPOS.map(g=>`<div class="gtab ${jogoState.grupo===g?'active':''}" onclick="setJogoGrupo('${g}')">${g}</div>`).join('');
-  document.getElementById('sc-home').textContent=jogoState.scoreH;
-  document.getElementById('sc-away').textContent=jogoState.scoreA;
+  const _loc=document.getElementById('jogo-local');if(_loc)_loc.value=jogoState.local||'casa';
+  atualizarPlacardLocal();
   updateClock();
   // Plantel = convocados (ou todos do grupo se não houver convocados)
   const jogsGrupo=jogsDoGrupo(jogoState.grupo);
@@ -3436,7 +3452,7 @@ function renderJogoAoVivo(){
     );
     analiseEl.innerHTML=`
       <div class="metrics-grid" style="margin-bottom:12px">
-        <div class="metric-card"><div class="metric-label">⚽ Resultado</div><div class="metric-value">${jogoState.scoreH} — ${jogoState.scoreA}</div><div class="metric-sub">ADB vs Adversário</div></div>
+        <div class="metric-card"><div class="metric-label">⚽ Resultado</div><div class="metric-value">${jogoState.local==='fora'?jogoState.scoreA+' — '+jogoState.scoreH:jogoState.scoreH+' — '+jogoState.scoreA}</div><div class="metric-sub">${jogoState.local==='fora'?'Adversário vs ADB (fora)':'ADB vs Adversário (casa)'}</div></div>
         <div class="metric-card"><div class="metric-label">🛡️ Defesas GR</div><div class="metric-value" style="color:#2563EB">${jogoState.defesas}</div></div>
         <div class="metric-card"><div class="metric-label">⚡ PP a Favor</div><div class="metric-value" style="color:#059669">${ppFTotal}</div><div class="metric-sub">${ppFGolo} golo(s) · ${ppFEfic}% · ${ppFDurSec>0?fmtSec(ppFDurSec):'—'}</div></div>
         <div class="metric-card"><div class="metric-label">⚡ PP Contra</div><div class="metric-value" style="color:#DC2626">${ppCTotal}</div><div class="metric-sub">${ppCGolo} sofrido(s) · ${ppCKill}% kill · ${ppCDurSec>0?fmtSec(ppCDurSec):'—'}</div></div>
@@ -3497,10 +3513,11 @@ async function gerarPDFJogo(){
 
     doc.setFillColor(...LGRAY);doc.roundedRect(margin,y,cW,22,3,3,'F');
     doc.setFontSize(26);doc.setFont('helvetica','bold');doc.setTextColor(...RED);
-    doc.text(jogoState.scoreH+'  —  '+jogoState.scoreA,W/2,y+14,{align:'center'});
+    const _fora=jogoState.local==='fora';
+    doc.text(_fora?jogoState.scoreA+'  —  '+jogoState.scoreH:jogoState.scoreH+'  —  '+jogoState.scoreA,W/2,y+14,{align:'center'});
     doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);
-    doc.text('ADB Campo',margin+4,y+20);
-    doc.text(adv,W-margin-4,y+20,{align:'right'});
+    doc.text(_fora?adv:'ADB Campo',margin+4,y+20);
+    doc.text(_fora?'ADB Campo':adv,W-margin-4,y+20,{align:'right'});
     y+=28;
 
     // ── Métricas ──
@@ -3847,7 +3864,7 @@ function toggleTimer(){
           syncTimerBtn('✓ Fim', true);
           document.getElementById('jogo-status').textContent='⏹ Jogo terminado';
           document.getElementById('jogo-parte-display').textContent='Fim do jogo!';
-          alert('🏁 Jogo terminado! Resultado final: ADB Campo '+jogoState.scoreH+' — '+jogoState.scoreA+' '+document.getElementById('jogo-adv-inp').value);
+          {const _adv=document.getElementById('jogo-adv-inp').value||'Adversário';alert('🏁 Jogo terminado! Resultado final: '+(jogoState.local==='fora'?_adv+' '+jogoState.scoreA+' — '+jogoState.scoreH+' ADB Campo':'ADB Campo '+jogoState.scoreH+' — '+jogoState.scoreA+' '+_adv));}
         }
       }
       if(jogoState.timerSec%10===0)renderJogoAoVivo();
@@ -3866,7 +3883,7 @@ function resetJogo(){
   if(!confirm('Reiniciar jogo?'))return;
   clearInterval(timerInterval);timerInterval=null;
   const np=jogoState.numPartes,dp=jogoState.durParte;
-  jogoState={scoreH:0,scoreA:0,eventos:[],emCampo:[],tempos:{},timerSec:0,running:false,paused:false,grupo:jogoState.grupo,numPartes:np,durParte:dp,parteAtual:1,parteIniciada:false,powerPlays:{favor:{ativo:false,inicio:null,lista:[]},contra:{ativo:false,inicio:null,lista:[]}},defesas:0,defesasJog:{},golosJog:{},convocados:jogoState.convocados||[]};
+  jogoState={local:jogoState.local||'casa',scoreH:0,scoreA:0,eventos:[],emCampo:[],tempos:{},timerSec:0,running:false,paused:false,grupo:jogoState.grupo,numPartes:np,durParte:dp,parteAtual:1,parteIniciada:false,powerPlays:{favor:{ativo:false,inicio:null,lista:[]},contra:{ativo:false,inicio:null,lista:[]}},defesas:0,defesasJog:{},golosJog:{},convocados:jogoState.convocados||[]};
   renderJogoAoVivo();
   syncTimerBtn('▶ Iniciar');
   document.getElementById('btn-timer').disabled=false;
@@ -4011,7 +4028,7 @@ async function guardarJogo(){
     score_h:jogoState.scoreH,score_a:jogoState.scoreA,
     num_partes:jogoState.numPartes,dur_parte:jogoState.durParte,
     eventos:jogoState.eventos,tempos:jogoState.tempos,
-    power_plays:jogoState.powerPlays,defesas:jogoState.defesas,
+    power_plays:{...jogoState.powerPlays,local:jogoState.local||'casa'},defesas:jogoState.defesas,
     golos_jog:jogoState.golosJog,defesas_jog:jogoState.defesasJog,
     convocados:jogoState.emCampo
   };
@@ -4103,7 +4120,7 @@ async function renderAnaliseJogos(mudouGrupo,recarregar){
   const jogosHtml=doGrupo.map(j=>{const r=reconstruirJogo(j);const ok=r.partesOk>0;return`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--gray-100);cursor:pointer">
     <input type="checkbox" ${ajState.excluidos[j.id]?'':'checked'} onchange="ajState.excluidos['${j.id}']=!this.checked;renderAnaliseJogos()">
     <span style="flex:1"><strong>${j.adversario}</strong> <span style="color:var(--gray-400)">${fmtDate(j.data)}</span></span>
-    <span class="badge ${j.score_h>j.score_a?'badge-ok':j.score_h<j.score_a?'badge-danger':'badge-gray'}">${j.score_h} — ${j.score_a}</span>
+    <span class="badge ${j.score_h>j.score_a?'badge-ok':j.score_h<j.score_a?'badge-danger':'badge-gray'}">${resTxt(j)}</span>
     ${ok?'':'<span style="font-size:10px;color:#B45309" title="Jogo gravado antes de existir o registo do cinco inicial">⚠️ sem cinco inicial</span>'}</label>`;}).join('');
 
   // Jogadores
@@ -4237,7 +4254,7 @@ function gerarPDFAnaliseJogos(){
     // ── Jogos incluídos ──
     titulo('Jogos incluídos');
     tabela([{lab:'Adversário',w:90},{lab:'Data',w:30},{lab:'Escalão',w:42},{lab:'Resultado',w:20,align:'r'}],
-      analisados.map(j=>[j.adversario||'—',fmtDate(j.data)+(j.hora?' '+String(j.hora).slice(0,5):''),j.grupo||'',{t:(j.score_h||0)+' - '+(j.score_a||0),bold:true,cor:j.score_h>j.score_a?GREEN:j.score_h<j.score_a?[220,38,38]:GRAY}]));
+      analisados.map(j=>[j.adversario||'—',fmtDate(j.data)+(j.hora?' '+String(j.hora).slice(0,5):''),j.grupo||'',{t:resTxt(j,' - '),bold:true,cor:j.score_h>j.score_a?GREEN:j.score_h<j.score_a?[220,38,38]:GRAY}]));
 
     // ── Jogadores ──
     const jogList=_ajSort(Object.values(A.jog).filter(o=>o.tempo>0||o.gm||o.gs),ajState.ordem.jog);
@@ -4292,7 +4309,7 @@ function renderHistoricoJogos(){
       return`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:12px;flex-wrap:wrap;gap:6px">
         <div><strong>${j.adversario}</strong> <span style="color:var(--gray-400)">${fmtDate(j.data)}${j.hora?' · '+String(j.hora).slice(0,5):''}</span></div>
         <div style="display:flex;align-items:center;gap:8px">
-          <span class="badge ${resultado}">${j.score_h} — ${j.score_a}</span>
+          <span class="badge ${resultado}">${resTxt(j)}</span>${jogoFora(j)?'<span style="font-size:10px;color:var(--gray-400)">✈️ fora</span>':'<span style="font-size:10px;color:var(--gray-400)">🏠 casa</span>'}
           ${ppF.length?`<span style="color:#059669;font-size:11px">⚡${ppFGolo}/${ppF.length}</span>`:''}
           ${ppC.length?`<span style="color:#DC2626;font-size:11px">🛡️${ppCKill}/${ppC.length}</span>`:''}
           <span style="color:#2563EB;font-size:11px">🛡️${j.defesas||0}</span>
@@ -4358,8 +4375,8 @@ function verJogo(id){
     </div>
     <!-- Resultado -->
     <div style="text-align:center;padding:12px;background:var(--gray-50);border-radius:10px;margin-bottom:14px">
-      <div style="font-size:36px;font-weight:900;color:var(--red)">${j.score_h} — ${j.score_a}</div>
-      <div style="font-size:12px;color:var(--gray-500)">ADB Campo vs ${j.adversario}</div>
+      <div style="font-size:36px;font-weight:900;color:var(--red)">${resTxt(j)}</div>
+      <div style="font-size:12px;color:var(--gray-500)">${equipasTxt(j)} · ${jogoFora(j)?'✈️ fora':'🏠 casa'}</div>
     </div>
     <!-- Métricas -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
@@ -4395,6 +4412,7 @@ function gerarPDFJogoHistorico(id){
   const j=(DB.jogos||[]).find(x=>x.id===id);if(!j)return;
   // Substituir temporariamente jogoState pelos dados do jogo guardado
   const savedState={...jogoState};
+  jogoState.local=jogoFora(j)?'fora':'casa';
   jogoState.scoreH=j.score_h;
   jogoState.scoreA=j.score_a;
   jogoState.eventos=j.eventos||[];
@@ -4433,6 +4451,7 @@ function editarDadosJogo(id){
       <button onclick="document.getElementById('modal-edit-jogo').remove()" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
     </div>
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Adversário</label><input type="text" class="form-input" id="ej-adv" value="${esc(j.adversario)}"></div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Local</label><select class="form-input" id="ej-local"><option value="casa" ${jogoFora(j)?'':'selected'}>🏠 Em casa (visitados)</option><option value="fora" ${jogoFora(j)?'selected':''}>✈️ Fora (visitantes)</option></select></div>
     <div class="form-row" style="margin-bottom:10px">
       <div class="form-group"><label class="form-label">📅 Data</label><input type="date" class="form-input" id="ej-data" value="${esc(j.data)}"></div>
       <div class="form-group"><label class="form-label">🕐 Hora</label><input type="time" class="form-input" id="ej-hora" value="${esc(j.hora?String(j.hora).slice(0,5):'')}"></div>
@@ -4453,7 +4472,8 @@ async function guardarDadosJogo(id){
     data:document.getElementById('ej-data').value||j.data,
     hora:document.getElementById('ej-hora').value||null,
     num_partes:parseInt(document.getElementById('ej-np').value)||j.num_partes,
-    dur_parte:parseInt(document.getElementById('ej-dp').value)||j.dur_parte
+    dur_parte:parseInt(document.getElementById('ej-dp').value)||j.dur_parte,
+    power_plays:{...(j.power_plays||{favor:{lista:[]},contra:{lista:[]}}),local:document.getElementById('ej-local').value}
   };
   const {error}=await sb.from('jogos').update(upd).eq('id',id);
   if(error){toast('Erro ao guardar: '+error.message);return;}
@@ -4591,7 +4611,7 @@ async function ejGuardar(){
     else if(e.tipo==='defesa'){def++;if(e.jid)defesasJog[e.jid]=(defesasJog[e.jid]||0)+1;}
   });
   const upd={eventos:evs,score_h:sh,score_a:sa,golos_jog:golosJog,defesas_jog:defesasJog,defesas:def};
-  if((sh!==j.score_h||sa!==j.score_a)&&!confirm(`O resultado passa de ${j.score_h} — ${j.score_a} para ${sh} — ${sa}. Continuar?`))return;
+  if((sh!==j.score_h||sa!==j.score_a)&&!confirm(`O resultado passa de ${resTxt(j)} para ${resTxt({...j,score_h:sh,score_a:sa})}. Continuar?`))return;
   const {error}=await sb.from('jogos').update(upd).eq('id',j.id);
   if(error){toast('Erro ao guardar: '+error.message);return;}
   Object.assign(j,upd);
@@ -6889,7 +6909,7 @@ async function gerarPDFJogador(){
         doc.text(jg.adversario,margin+2,y);
         doc.setTextColor(...GRAY);doc.text(fmtDate(jg.data),margin+55,y);
         doc.setTextColor(...resColor);doc.setFont('helvetica','bold');
-        doc.text(jg.score_h+'—'+jg.score_a,margin+90,y);
+        doc.text(resTxt(jg,'—'),margin+90,y);
         doc.setTextColor(...GRAY);doc.setFont('helvetica','normal');
         doc.text(mins+"'",margin+105,y);
         if(golos>0){doc.setTextColor(...RED);doc.text(golos+(golos>1?' golos':' golo'),margin+118,y);}
