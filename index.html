@@ -4297,6 +4297,7 @@ function renderHistoricoJogos(){
           ${ppC.length?`<span style="color:#DC2626;font-size:11px">🛡️${ppCKill}/${ppC.length}</span>`:''}
           <span style="color:#2563EB;font-size:11px">🛡️${j.defesas||0}</span>
           <button class="btn btn-sm" onclick="editarDadosJogo('${j.id}')">✏️</button>
+          <button class="btn btn-sm" title="Editar eventos (golos, cartões, defesas)" onclick="editarEventosJogo('${j.id}')">⚽ Eventos</button>
           <button class="btn btn-sm" onclick="verJogo('${j.id}')">👁 Ver</button>
           <button class="btn btn-sm" style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE" onclick="gerarPDFJogoHistorico('${j.id}')">⬇ PDF</button>
           <button class="btn btn-sm" style="color:#DC2626" onclick="apagarJogo('${j.id}')">×</button>
@@ -4460,6 +4461,143 @@ async function guardarDadosJogo(id){
   DB.jogos.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||String(b.hora||'').localeCompare(String(a.hora||'')));
   document.getElementById('modal-edit-jogo')?.remove();
   toast('✅ Jogo atualizado!');showSync();
+  renderHistoricoJogos();
+}
+
+// ═══ EDITAR EVENTOS DE JOGO GUARDADO ═══
+const EJ_TIPOS={'golo':'⚽ Golo','golo-s':'⚽ Golo sofrido','defesa':'🛡️ Defesa GR','falta':'🟡 Falta','amarelo':'🟨 Amarelo','azul':'🟦 Azul','vermelho':'🟥 Vermelho'};
+const EJ_ICONS={'golo':'⚽','golo-s':'⚽','defesa':'🛡️','falta':'🟡','amarelo':'🟨','azul':'🟦','vermelho':'🟥'};
+let _ejState=null;
+function _ejJogadores(j){
+  const ids=new Set(Object.keys(j.tempos||{}));
+  (j.convocados||[]).forEach(id=>ids.add(id));
+  jogsDoGrupo(j.grupo).forEach(x=>ids.add(x.id));
+  return DB.jogadores.filter(x=>ids.has(x.id)).sort((a,b)=>a.nome.localeCompare(b.nome));
+}
+function _ejDesc(e){
+  const jg=e.jid?DB.jogadores.find(x=>x.id===e.jid):null;
+  const n=jg?jg.nome:'';
+  switch(e.tipo){
+    case'golo':return'Golo'+(n?' — '+n:'');
+    case'golo-s':return'Golo sofrido';
+    case'defesa':return'Defesa GR'+(jg?' — '+jg.nome.split(' ')[0]:'');
+    case'falta':return'Falta'+(n?' — '+n:'');
+    case'amarelo':return'Amarelo'+(n?' — '+n:'');
+    case'azul':return'Azul'+(n?' — '+n:'');
+    case'vermelho':return'Vermelho'+(n?' — '+n:'');
+  }
+  return e.desc||'';
+}
+function editarEventosJogo(id){
+  const j=(DB.jogos||[]).find(x=>x.id===id);if(!j)return;
+  _ejState={id,evs:JSON.parse(JSON.stringify(j.eventos||[])),jogs:_ejJogadores(j),numPartes:j.num_partes||Math.max(1,...(j.eventos||[]).map(e=>e.parte||0))};
+  document.getElementById('modal-ej')?.remove();
+  const div=document.createElement('div');
+  div.id='modal-ej';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+  div.innerHTML=`<div style="background:#fff;border-radius:14px;padding:18px;width:100%;max-width:620px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-weight:600;font-size:15px">⚽ Editar eventos — ${j.adversario}</span>
+      <button onclick="document.getElementById('modal-ej').remove()" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--gray-500);margin-bottom:10px">Corrige o jogador, o tipo ou o minuto de cada evento, apaga os que estão a mais ou acrescenta os que faltam. O resultado, os golos por jogador e as defesas são recalculados ao guardar.</div>
+    <div id="ej-lista"></div>
+    <div style="border-top:1px solid var(--gray-200);margin-top:12px;padding-top:12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px">➕ Acrescentar evento</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <select class="form-input" id="ej-add-parte" style="width:auto">${Array.from({length:_ejState.numPartes},(_,i)=>`<option value="${i+1}">${i+1}ª parte</option>`).join('')}</select>
+        <input type="number" class="form-input" id="ej-add-min" min="0" max="45" value="0" style="width:70px" title="Minuto">
+        <select class="form-input" id="ej-add-tipo" style="width:auto">${Object.entries(EJ_TIPOS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
+        <select class="form-input" id="ej-add-jog" style="width:auto"><option value="">— Jogador —</option>${_ejState.jogs.map(x=>`<option value="${x.id}">${x.nome} #${x.num}</option>`).join('')}</select>
+        <button class="btn btn-sm" onclick="ejAdicionar()">Adicionar</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="ejGuardar()">💾 Guardar alterações</button>
+  </div>`;
+  div.addEventListener('click',e=>{if(e.target===div)div.remove();});
+  document.body.appendChild(div);
+  ejRender();
+}
+function ejRender(){
+  const el=document.getElementById('ej-lista');if(!el||!_ejState)return;
+  const evs=_ejState.evs.map((e,i)=>({...e,_i:i}));
+  const ord=(a,b)=>((a.parte||0)-(b.parte||0))||((a.ts||0)-(b.ts||0))||(a._i-b._i);
+  const visiveis=evs.filter(e=>e.tipo!=='inicio-parte').sort(ord);
+  if(!visiveis.length){el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">Sem eventos</div>';return;}
+  let parteAtual=null,html='';
+  visiveis.forEach(e=>{
+    const p=e.parte||0;
+    if(p!==parteAtual){parteAtual=p;html+=`<div style="font-size:12px;font-weight:700;color:var(--red);margin:10px 0 4px">${p?p+'ª Parte':'Sem parte registada'}</div>`;}
+    const min=e.seg!=null?Math.floor(e.seg/60):(e.min||0);
+    if(EJ_TIPOS[e.tipo]){
+      const jogOpts=`<option value="">— Jogador —</option>`+_ejState.jogs.map(x=>`<option value="${x.id}" ${x.id===e.jid?'selected':''}>${x.nome} #${x.num}</option>`).join('');
+      html+=`<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--gray-100);flex-wrap:wrap">
+        <input type="number" class="form-input" min="0" max="45" value="${min}" style="width:60px;padding:4px 6px" title="Minuto" onchange="ejSet(${e._i},'min',this.value)">
+        <select class="form-input" style="width:auto;padding:4px 6px" onchange="ejSet(${e._i},'tipo',this.value)">${Object.entries(EJ_TIPOS).map(([k,v])=>`<option value="${k}" ${k===e.tipo?'selected':''}>${v}</option>`).join('')}</select>
+        <select class="form-input" style="flex:1;min-width:140px;padding:4px 6px" ${e.tipo==='golo-s'?'disabled':''} onchange="ejSet(${e._i},'jid',this.value)">${jogOpts}</select>
+        <button onclick="ejApagar(${e._i})" title="Apagar" style="background:none;border:none;cursor:pointer;color:#DC2626;font-size:16px">🗑️</button>
+      </div>`;
+    } else {
+      html+=`<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--gray-100);font-size:12px;color:var(--gray-500)"><span style="min-width:30px">${min}'</span><span>${e.icon||'•'} ${e.desc||e.tipo}</span><span style="margin-left:auto;font-size:10px">(não editável)</span></div>`;
+    }
+  });
+  el.innerHTML=html;
+}
+function ejSet(i,campo,val){
+  const e=_ejState.evs[i];if(!e)return;
+  if(campo==='min'){const m=Math.max(0,parseInt(val)||0);const s=e.seg!=null?e.seg%60:0;e.min=m;e.seg=m*60+s;}
+  else if(campo==='tipo'){e.tipo=val;if(val==='golo-s')e.jid=null;}
+  else if(campo==='jid'){e.jid=val||null;}
+  ejRender();
+}
+function ejApagar(i){
+  const e=_ejState.evs[i];if(!e)return;
+  if(!confirm('Apagar este evento?'))return;
+  _ejState.evs.splice(i,1);ejRender();
+}
+function ejAdicionar(){
+  const parte=parseInt(document.getElementById('ej-add-parte').value)||1;
+  const min=Math.max(0,parseInt(document.getElementById('ej-add-min').value)||0);
+  const tipo=document.getElementById('ej-add-tipo').value;
+  const jid=tipo==='golo-s'?null:(document.getElementById('ej-add-jog').value||null);
+  const seg=min*60;
+  // Posicionar no tempo: a seguir ao último evento da mesma parte com segundo <= seg
+  const daParte=_ejState.evs.filter(e=>e.parte===parte).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  let ref=null;
+  daParte.forEach(e=>{const s=e.seg!=null?e.seg:(e.min||0)*60;if(e.tipo==='inicio-parte'||s<=seg)ref=e;});
+  const prox=ref?daParte[daParte.indexOf(ref)+1]:daParte[0];
+  let ts;
+  if(ref&&prox)ts=(ref.ts+prox.ts)/2;
+  else if(ref)ts=(ref.ts||0)+1;
+  else if(prox)ts=(prox.ts||0)-1;
+  else ts=Date.now();
+  // Quem estava em campo nesse momento (para a análise de +/-)
+  let emCampo=null;
+  if(ref){emCampo=Array.isArray(ref.emCampo)?[...ref.emCampo]:(ref.tipo==='inicio-parte'?[...(ref.jids||[])]:null);}
+  const ev={tipo,min,seg,parte,jid,ts,icon:EJ_ICONS[tipo]};
+  if(emCampo)ev.emCampo=emCampo;
+  _ejState.evs.push(ev);
+  ejRender();toast('➕ Evento acrescentado (falta guardar)');
+}
+async function ejGuardar(){
+  if(!_ejState)return;
+  const j=(DB.jogos||[]).find(x=>x.id===_ejState.id);if(!j)return;
+  const evs=_ejState.evs;
+  const golosJog={},defesasJog={};let sh=0,sa=0,def=0;
+  evs.forEach(e=>{
+    if(EJ_TIPOS[e.tipo]){e.desc=_ejDesc(e);e.icon=EJ_ICONS[e.tipo];}
+    if(e.tipo==='golo'){sh++;if(e.jid)golosJog[e.jid]=(golosJog[e.jid]||0)+1;}
+    else if(e.tipo==='golo-s')sa++;
+    else if(e.tipo==='defesa'){def++;if(e.jid)defesasJog[e.jid]=(defesasJog[e.jid]||0)+1;}
+  });
+  const upd={eventos:evs,score_h:sh,score_a:sa,golos_jog:golosJog,defesas_jog:defesasJog,defesas:def};
+  if((sh!==j.score_h||sa!==j.score_a)&&!confirm(`O resultado passa de ${j.score_h} — ${j.score_a} para ${sh} — ${sa}. Continuar?`))return;
+  const {error}=await sb.from('jogos').update(upd).eq('id',j.id);
+  if(error){toast('Erro ao guardar: '+error.message);return;}
+  Object.assign(j,upd);
+  document.getElementById('modal-ej')?.remove();
+  _ejState=null;
+  toast('✅ Eventos atualizados!');showSync();
   renderHistoricoJogos();
 }
 
