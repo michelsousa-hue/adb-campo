@@ -4314,7 +4314,7 @@ function renderHistoricoJogos(){
           ${ppC.length?`<span style="color:#DC2626;font-size:11px">🛡️${ppCKill}/${ppC.length}</span>`:''}
           <span style="color:#2563EB;font-size:11px">🛡️${j.defesas||0}</span>
           <button class="btn btn-sm" onclick="editarDadosJogo('${j.id}')">✏️</button>
-          <button class="btn btn-sm" title="Editar eventos (golos, cartões, defesas)" onclick="editarEventosJogo('${j.id}')">⚽ Eventos</button>
+          <button class="btn btn-sm" title="Editar eventos (golos, cartões, defesas, substituições)" onclick="editarEventosJogo('${j.id}')">⚽ Eventos</button>
           <button class="btn btn-sm" onclick="verJogo('${j.id}')">👁 Ver</button>
           <button class="btn btn-sm" style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE" onclick="gerarPDFJogoHistorico('${j.id}')">⬇ PDF</button>
           <button class="btn btn-sm" style="color:#DC2626" onclick="apagarJogo('${j.id}')">×</button>
@@ -4451,6 +4451,7 @@ function editarDadosJogo(id){
       <button onclick="document.getElementById('modal-edit-jogo').remove()" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
     </div>
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Adversário</label><input type="text" class="form-input" id="ej-adv" value="${esc(j.adversario)}"></div>
+    <div class="form-group" style="margin-bottom:10px"><label class="form-label">Escalão</label><select class="form-input" id="ej-grupo">${[...new Set([...(GRUPOS.length?GRUPOS:['Sub9+Sub11','Sub13+Sub15']),j.grupo].filter(Boolean))].map(g=>`<option value="${esc(g)}" ${g===j.grupo?'selected':''}>${g}</option>`).join('')}</select></div>
     <div class="form-group" style="margin-bottom:10px"><label class="form-label">Local</label><select class="form-input" id="ej-local"><option value="casa" ${jogoFora(j)?'':'selected'}>🏠 Em casa (visitados)</option><option value="fora" ${jogoFora(j)?'selected':''}>✈️ Fora (visitantes)</option></select></div>
     <div class="form-row" style="margin-bottom:10px">
       <div class="form-group"><label class="form-label">📅 Data</label><input type="date" class="form-input" id="ej-data" value="${esc(j.data)}"></div>
@@ -4469,6 +4470,7 @@ async function guardarDadosJogo(id){
   const j=(DB.jogos||[]).find(x=>x.id===id);if(!j)return;
   const upd={
     adversario:document.getElementById('ej-adv').value||'Adversário',
+    grupo:document.getElementById('ej-grupo').value||j.grupo,
     data:document.getElementById('ej-data').value||j.data,
     hora:document.getElementById('ej-hora').value||null,
     num_partes:parseInt(document.getElementById('ej-np').value)||j.num_partes,
@@ -4486,49 +4488,75 @@ async function guardarDadosJogo(id){
 
 // ═══ EDITAR EVENTOS DE JOGO GUARDADO ═══
 const EJ_TIPOS={'golo':'⚽ Golo','golo-s':'⚽ Golo sofrido','defesa':'🛡️ Defesa GR','falta':'🟡 Falta','amarelo':'🟨 Amarelo','azul':'🟦 Azul','vermelho':'🟥 Vermelho'};
-const EJ_ICONS={'golo':'⚽','golo-s':'⚽','defesa':'🛡️','falta':'🟡','amarelo':'🟨','azul':'🟦','vermelho':'🟥'};
+const EJ_ICONS={'golo':'⚽','golo-s':'⚽','defesa':'🛡️','falta':'🟡','amarelo':'🟨','azul':'🟦','vermelho':'🟥','sub':'🔄'};
 let _ejState=null;
 function _ejJogadores(j){
   const ids=new Set(Object.keys(j.tempos||{}));
   (j.convocados||[]).forEach(id=>ids.add(id));
   jogsDoGrupo(j.grupo).forEach(x=>ids.add(x.id));
+  (j.eventos||[]).forEach(e=>{if(e.jid)ids.add(e.jid);if(e.jidSai)ids.add(e.jidSai);(e.jids||[]).forEach(x=>ids.add(x));});
   return DB.jogadores.filter(x=>ids.has(x.id)).sort((a,b)=>a.nome.localeCompare(b.nome));
 }
+function _ejNome(id){const jg=id?DB.jogadores.find(x=>x.id===id):null;return jg?jg.nome:'';}
 function _ejDesc(e){
-  const jg=e.jid?DB.jogadores.find(x=>x.id===e.jid):null;
-  const n=jg?jg.nome:'';
+  const n=_ejNome(e.jid);
   switch(e.tipo){
     case'golo':return'Golo'+(n?' — '+n:'');
     case'golo-s':return'Golo sofrido';
-    case'defesa':return'Defesa GR'+(jg?' — '+jg.nome.split(' ')[0]:'');
+    case'defesa':return'Defesa GR'+(n?' — '+n.split(' ')[0]:'');
     case'falta':return'Falta'+(n?' — '+n:'');
     case'amarelo':return'Amarelo'+(n?' — '+n:'');
     case'azul':return'Azul'+(n?' — '+n:'');
     case'vermelho':return'Vermelho'+(n?' — '+n:'');
+    case'sub':{const s=_ejNome(e.jidSai);return'Sub — '+(n||'?')+' entra'+(s?' / '+s+' sai':'');}
+    case'inicio-parte':return'Início da '+e.parte+'ª parte — '+(e.jids||[]).length+' em campo';
   }
   return e.desc||'';
 }
+function _ejOpts(jogs,sel,vazio){return`<option value="">${vazio}</option>`+jogs.map(x=>`<option value="${x.id}" ${x.id===sel?'selected':''}>${x.nome} #${x.num}</option>`).join('');}
+// Tempo em campo por jogador (segundos) nas partes indicadas, reconstruído a partir dos eventos
+function _ejTemposPartes(eventos,partes,durParte){
+  const out={};
+  const all=eventos.map((e,i)=>({...e,_i:i})).sort((a,b)=>((a.ts||0)-(b.ts||0))||(a._i-b._i));
+  partes.forEach(p=>{
+    const evs=all.filter(e=>e.parte===p);
+    const ini=evs.find(e=>e.tipo==='inicio-parte');if(!ini)return;
+    let L=[...(ini.jids||[])],t=0;
+    const add=d=>{if(d>0)L.forEach(id=>{out[id]=(out[id]||0)+d;});};
+    evs.forEach(e=>{
+      if(e.tipo!=='sub')return;
+      const s=e.seg!=null?e.seg:t;
+      if(s>t){add(s-t);t=s;}
+      if(Array.isArray(e.emCampo))L=[...e.emCampo];
+      else{if(e.jidSai)L=L.filter(x=>x!==e.jidSai);if(e.jid&&!L.includes(e.jid))L.push(e.jid);}
+    });
+    add(Math.max(durParte,t)-t);
+  });
+  return out;
+}
 function editarEventosJogo(id){
   const j=(DB.jogos||[]).find(x=>x.id===id);if(!j)return;
-  _ejState={id,evs:JSON.parse(JSON.stringify(j.eventos||[])),jogs:_ejJogadores(j),numPartes:j.num_partes||Math.max(1,...(j.eventos||[]).map(e=>e.parte||0))};
+  const evs=JSON.parse(JSON.stringify(j.eventos||[]));
+  _ejState={id,evs,jogs:_ejJogadores(j),dirty:new Set(),iniEdit:null,numPartes:Math.max(j.num_partes||1,...evs.map(e=>e.parte||0))};
   document.getElementById('modal-ej')?.remove();
   const div=document.createElement('div');
   div.id='modal-ej';
   div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
-  div.innerHTML=`<div style="background:#fff;border-radius:14px;padding:18px;width:100%;max-width:620px;max-height:90vh;overflow-y:auto">
+  div.innerHTML=`<div style="background:#fff;border-radius:14px;padding:18px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <span style="font-weight:600;font-size:15px">⚽ Editar eventos — ${j.adversario}</span>
       <button onclick="document.getElementById('modal-ej').remove()" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
     </div>
-    <div style="font-size:11px;color:var(--gray-500);margin-bottom:10px">Corrige o jogador, o tipo ou o minuto de cada evento, apaga os que estão a mais ou acrescenta os que faltam. O resultado, os golos por jogador e as defesas são recalculados ao guardar.</div>
+    <div style="font-size:11px;color:var(--gray-500);margin-bottom:10px">Corrige o cinco inicial, as substituições, o jogador, o tipo ou o minuto de cada evento; apaga o que está a mais ou acrescenta o que falta. Resultado, golos, defesas e minutos jogados são recalculados ao guardar.</div>
     <div id="ej-lista"></div>
     <div style="border-top:1px solid var(--gray-200);margin-top:12px;padding-top:12px">
       <div style="font-size:12px;font-weight:700;margin-bottom:6px">➕ Acrescentar evento</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         <select class="form-input" id="ej-add-parte" style="width:auto">${Array.from({length:_ejState.numPartes},(_,i)=>`<option value="${i+1}">${i+1}ª parte</option>`).join('')}</select>
         <input type="number" class="form-input" id="ej-add-min" min="0" max="45" value="0" style="width:70px" title="Minuto">
-        <select class="form-input" id="ej-add-tipo" style="width:auto">${Object.entries(EJ_TIPOS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
-        <select class="form-input" id="ej-add-jog" style="width:auto"><option value="">— Jogador —</option>${_ejState.jogs.map(x=>`<option value="${x.id}">${x.nome} #${x.num}</option>`).join('')}</select>
+        <select class="form-input" id="ej-add-tipo" style="width:auto" onchange="document.getElementById('ej-add-sai').style.display=this.value==='sub'?'':'none'">${Object.entries(EJ_TIPOS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}<option value="sub">🔄 Substituição</option></select>
+        <select class="form-input" id="ej-add-jog" style="width:auto">${_ejOpts(_ejState.jogs,null,'— Jogador (entra) —')}</select>
+        <select class="form-input" id="ej-add-sai" style="width:auto;display:none">${_ejOpts(_ejState.jogs,null,'— Sai —')}</select>
         <button class="btn btn-sm" onclick="ejAdicionar()">Adicionar</button>
       </div>
     </div>
@@ -4540,39 +4568,61 @@ function editarEventosJogo(id){
 }
 function ejRender(){
   const el=document.getElementById('ej-lista');if(!el||!_ejState)return;
+  const jogs=_ejState.jogs;
   const evs=_ejState.evs.map((e,i)=>({...e,_i:i}));
-  const ord=(a,b)=>((a.parte||0)-(b.parte||0))||((a.ts||0)-(b.ts||0))||(a._i-b._i);
-  const visiveis=evs.filter(e=>e.tipo!=='inicio-parte').sort(ord);
+  const segOf=e=>e.tipo==='inicio-parte'?-1:(e.seg!=null?e.seg:(e.min||0)*60);
+  const visiveis=evs.sort((a,b)=>((a.parte||0)-(b.parte||0))||(segOf(a)-segOf(b))||((a.ts||0)-(b.ts||0))||(a._i-b._i));
   if(!visiveis.length){el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">Sem eventos</div>';return;}
+  const row='display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--gray-100);flex-wrap:wrap';
+  const sel='padding:4px 6px';
+  const minInp=(e,min)=>`<input type="number" class="form-input" min="0" max="45" value="${min}" style="width:60px;${sel}" title="Minuto" onchange="ejSet(${e._i},'min',this.value)">`;
+  const del=e=>`<button onclick="ejApagar(${e._i})" title="Apagar" style="background:none;border:none;cursor:pointer;color:#DC2626;font-size:16px">🗑️</button>`;
   let parteAtual=null,html='';
   visiveis.forEach(e=>{
     const p=e.parte||0;
     if(p!==parteAtual){parteAtual=p;html+=`<div style="font-size:12px;font-weight:700;color:var(--red);margin:10px 0 4px">${p?p+'ª Parte':'Sem parte registada'}</div>`;}
     const min=e.seg!=null?Math.floor(e.seg/60):(e.min||0);
-    if(EJ_TIPOS[e.tipo]){
-      const jogOpts=`<option value="">— Jogador —</option>`+_ejState.jogs.map(x=>`<option value="${x.id}" ${x.id===e.jid?'selected':''}>${x.nome} #${x.num}</option>`).join('');
-      html+=`<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--gray-100);flex-wrap:wrap">
-        <input type="number" class="form-input" min="0" max="45" value="${min}" style="width:60px;padding:4px 6px" title="Minuto" onchange="ejSet(${e._i},'min',this.value)">
-        <select class="form-input" style="width:auto;padding:4px 6px" onchange="ejSet(${e._i},'tipo',this.value)">${Object.entries(EJ_TIPOS).map(([k,v])=>`<option value="${k}" ${k===e.tipo?'selected':''}>${v}</option>`).join('')}</select>
-        <select class="form-input" style="flex:1;min-width:140px;padding:4px 6px" ${e.tipo==='golo-s'?'disabled':''} onchange="ejSet(${e._i},'jid',this.value)">${jogOpts}</select>
-        <button onclick="ejApagar(${e._i})" title="Apagar" style="background:none;border:none;cursor:pointer;color:#DC2626;font-size:16px">🗑️</button>
-      </div>`;
+    if(e.tipo==='inicio-parte'){
+      const nomes=(e.jids||[]).map(id=>_ejNome(id).split(' ')[0]||'?').join(', ');
+      html+=`<div style="${row}"><span style="font-size:12px">▶️ <strong>Cinco inicial:</strong> ${nomes||'—'}</span>
+        <button class="btn btn-sm" style="margin-left:auto" onclick="_ejState.iniEdit=${_ejState.iniEdit===e._i?'null':e._i};ejRender()">${_ejState.iniEdit===e._i?'Fechar':'✏️ Alterar'}</button></div>`;
+      if(_ejState.iniEdit===e._i){
+        html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px;padding:6px;background:var(--gray-50);border-radius:8px;margin:4px 0">${jogs.map(x=>`<label style="font-size:12px;display:flex;gap:4px;align-items:center;cursor:pointer"><input type="checkbox" ${(e.jids||[]).includes(x.id)?'checked':''} onchange="ejToggleIni(${e._i},'${x.id}',this.checked)">${x.nome} #${x.num}</label>`).join('')}</div>`;
+      }
+    } else if(e.tipo==='sub'){
+      html+=`<div style="${row}">${minInp(e,min)}<span style="font-size:13px">🔄</span>
+        <span style="font-size:11px;color:#059669">entra</span><select class="form-input" style="flex:1;min-width:120px;${sel}" onchange="ejSet(${e._i},'jid',this.value)">${_ejOpts(jogs,e.jid,'— Entra —')}</select>
+        <span style="font-size:11px;color:#DC2626">sai</span><select class="form-input" style="flex:1;min-width:120px;${sel}" onchange="ejSet(${e._i},'jidSai',this.value)">${_ejOpts(jogs,e.jidSai,'— Sai —')}</select>
+        ${del(e)}</div>`;
+    } else if(EJ_TIPOS[e.tipo]){
+      html+=`<div style="${row}">${minInp(e,min)}
+        <select class="form-input" style="width:auto;${sel}" onchange="ejSet(${e._i},'tipo',this.value)">${Object.entries(EJ_TIPOS).map(([k,v])=>`<option value="${k}" ${k===e.tipo?'selected':''}>${v}</option>`).join('')}</select>
+        <select class="form-input" style="flex:1;min-width:140px;${sel}" ${e.tipo==='golo-s'?'disabled':''} onchange="ejSet(${e._i},'jid',this.value)">${_ejOpts(jogs,e.jid,'— Jogador —')}</select>
+        ${del(e)}</div>`;
     } else {
-      html+=`<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--gray-100);font-size:12px;color:var(--gray-500)"><span style="min-width:30px">${min}'</span><span>${e.icon||'•'} ${e.desc||e.tipo}</span><span style="margin-left:auto;font-size:10px">(não editável)</span></div>`;
+      html+=`<div style="${row};font-size:12px;color:var(--gray-500)"><span style="min-width:30px">${min}'</span><span>${e.icon||'•'} ${e.desc||e.tipo}</span><span style="margin-left:auto;font-size:10px">(não editável)</span></div>`;
     }
   });
   el.innerHTML=html;
 }
+function _ejMarca(e){if(e&&e.parte)_ejState.dirty.add(e.parte);}
 function ejSet(i,campo,val){
   const e=_ejState.evs[i];if(!e)return;
-  if(campo==='min'){const m=Math.max(0,parseInt(val)||0);const s=e.seg!=null?e.seg%60:0;e.min=m;e.seg=m*60+s;}
+  if(campo==='min'){const m=Math.max(0,parseInt(val)||0);const s=e.seg!=null?e.seg%60:0;e.min=m;e.seg=m*60+s;_ejMarca(e);}
   else if(campo==='tipo'){e.tipo=val;if(val==='golo-s')e.jid=null;}
-  else if(campo==='jid'){e.jid=val||null;}
+  else if(campo==='jid'){e.jid=val||null;if(e.tipo==='sub')_ejMarca(e);}
+  else if(campo==='jidSai'){e.jidSai=val||null;_ejMarca(e);}
   ejRender();
+}
+function ejToggleIni(i,jid,on){
+  const e=_ejState.evs[i];if(!e)return;
+  e.jids=(e.jids||[]).filter(x=>x!==jid);if(on)e.jids.push(jid);
+  _ejMarca(e);ejRender();
 }
 function ejApagar(i){
   const e=_ejState.evs[i];if(!e)return;
   if(!confirm('Apagar este evento?'))return;
+  if(e.tipo==='sub'||e.seg!=null)_ejMarca(e);
   _ejState.evs.splice(i,1);ejRender();
 }
 function ejAdicionar(){
@@ -4580,8 +4630,9 @@ function ejAdicionar(){
   const min=Math.max(0,parseInt(document.getElementById('ej-add-min').value)||0);
   const tipo=document.getElementById('ej-add-tipo').value;
   const jid=tipo==='golo-s'?null:(document.getElementById('ej-add-jog').value||null);
+  const jidSai=tipo==='sub'?(document.getElementById('ej-add-sai').value||null):undefined;
+  if(tipo==='sub'&&!jid&&!jidSai){toast('Escolhe quem entra e/ou quem sai');return;}
   const seg=min*60;
-  // Posicionar no tempo: a seguir ao último evento da mesma parte com segundo <= seg
   const daParte=_ejState.evs.filter(e=>e.parte===parte).sort((a,b)=>(a.ts||0)-(b.ts||0));
   let ref=null;
   daParte.forEach(e=>{const s=e.seg!=null?e.seg:(e.min||0)*60;if(e.tipo==='inicio-parte'||s<=seg)ref=e;});
@@ -4591,26 +4642,49 @@ function ejAdicionar(){
   else if(ref)ts=(ref.ts||0)+1;
   else if(prox)ts=(prox.ts||0)-1;
   else ts=Date.now();
-  // Quem estava em campo nesse momento (para a análise de +/-)
   let emCampo=null;
   if(ref){emCampo=Array.isArray(ref.emCampo)?[...ref.emCampo]:(ref.tipo==='inicio-parte'?[...(ref.jids||[])]:null);}
   const ev={tipo,min,seg,parte,jid,ts,icon:EJ_ICONS[tipo]};
+  if(tipo==='sub'){ev.jidSai=jidSai;if(emCampo){emCampo=emCampo.filter(x=>x!==jidSai);if(jid&&!emCampo.includes(jid))emCampo.push(jid);}}
   if(emCampo)ev.emCampo=emCampo;
-  _ejState.evs.push(ev);
+  _ejState.evs.push(ev);_ejMarca(ev);
   ejRender();toast('➕ Evento acrescentado (falta guardar)');
 }
 async function ejGuardar(){
   if(!_ejState)return;
   const j=(DB.jogos||[]).find(x=>x.id===_ejState.id);if(!j)return;
-  const evs=_ejState.evs;
+  const evs=_ejState.evs,dirty=[..._ejState.dirty];
+  const durParte=(j.dur_parte||8)*60;
+  // Partes alteradas: reordenar por minuto e recalcular quem estava em campo em cada evento
+  const temposAntes=_ejTemposPartes(j.eventos||[],dirty,durParte);
+  const segOf=e=>e.tipo==='inicio-parte'?-1:(e.seg!=null?e.seg:(e.min||0)*60);
+  dirty.forEach(p=>{
+    const pe=evs.filter(e=>e.parte===p);
+    const tsOrd=pe.map(e=>e.ts||0).sort((a,b)=>a-b);
+    const ord=[...pe].sort((a,b)=>(segOf(a)-segOf(b))||((a.ts||0)-(b.ts||0)));
+    ord.forEach((e,k)=>{e.ts=tsOrd[k];});
+    const ini=ord.find(e=>e.tipo==='inicio-parte');if(!ini)return;
+    let L=[...(ini.jids||[])];
+    ord.forEach(e=>{
+      if(e.tipo==='inicio-parte')return;
+      if(e.tipo==='sub'){if(e.jidSai)L=L.filter(x=>x!==e.jidSai);if(e.jid&&!L.includes(e.jid))L.push(e.jid);}
+      e.emCampo=[...L];
+    });
+  });
+  const temposDepois=_ejTemposPartes(evs,dirty,durParte);
+  const tempos={...(j.tempos||{})};
+  Object.entries(temposAntes).forEach(([id,s])=>{tempos[id]=(tempos[id]||0)-s;});
+  Object.entries(temposDepois).forEach(([id,s])=>{tempos[id]=(tempos[id]||0)+s;});
+  Object.keys(tempos).forEach(id=>{tempos[id]=Math.max(0,Math.round(tempos[id]));});
+  // Estatísticas
   const golosJog={},defesasJog={};let sh=0,sa=0,def=0;
   evs.forEach(e=>{
-    if(EJ_TIPOS[e.tipo]){e.desc=_ejDesc(e);e.icon=EJ_ICONS[e.tipo];}
+    if(EJ_TIPOS[e.tipo]||e.tipo==='sub'||e.tipo==='inicio-parte'){e.desc=_ejDesc(e);if(EJ_ICONS[e.tipo])e.icon=EJ_ICONS[e.tipo];}
     if(e.tipo==='golo'){sh++;if(e.jid)golosJog[e.jid]=(golosJog[e.jid]||0)+1;}
     else if(e.tipo==='golo-s')sa++;
     else if(e.tipo==='defesa'){def++;if(e.jid)defesasJog[e.jid]=(defesasJog[e.jid]||0)+1;}
   });
-  const upd={eventos:evs,score_h:sh,score_a:sa,golos_jog:golosJog,defesas_jog:defesasJog,defesas:def};
+  const upd={eventos:evs,score_h:sh,score_a:sa,golos_jog:golosJog,defesas_jog:defesasJog,defesas:def,tempos};
   if((sh!==j.score_h||sa!==j.score_a)&&!confirm(`O resultado passa de ${resTxt(j)} para ${resTxt({...j,score_h:sh,score_a:sa})}. Continuar?`))return;
   const {error}=await sb.from('jogos').update(upd).eq('id',j.id);
   if(error){toast('Erro ao guardar: '+error.message);return;}
