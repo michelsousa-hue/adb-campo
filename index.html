@@ -1620,6 +1620,67 @@ function showLoading(v){
 }
 
 // ═══ SUPABASE DATA LAYER ═══
+// Carrega jogadores em blocos pequenos (as fotos podem ser pesadas) e repete se falhar
+async function carregarJogadoresSeguro(){
+  const BLOCO=15;let todos=[],ini=0,ultimoErro=null;
+  while(true){
+    let r=null;
+    for(let t=0;t<3;t++){
+      r=await sb.from('jogadores').select('*').order('nome').order('id').range(ini,ini+BLOCO-1);
+      if(!r.error)break;
+      ultimoErro=r.error;await new Promise(res=>setTimeout(res,1200*(t+1)));
+    }
+    if(r.error){
+      // Último recurso: carregar sem fotos, para pelo menos aparecerem os jogadores
+      const semFoto=await carregarJogadoresSemFoto();
+      if(semFoto)return{data:semFoto,error:null,aviso:'fotos'};
+      return{data:todos.length?todos:null,error:ultimoErro};
+    }
+    const rows=r.data||[];todos=todos.concat(rows);
+    if(rows.length<BLOCO)break;
+    ini+=BLOCO;
+  }
+  return{data:todos,error:null};
+}
+async function carregarJogadoresSemFoto(){
+  // Descobre as colunas com uma linha e pede todas menos a foto
+  const um=await sb.from('jogadores').select('id,nome').limit(1);
+  if(um.error)return null;
+  const cols=['id','nome','num','sub','pos','aval','nasc','cont','obs'];
+  let r=await sb.from('jogadores').select('*').limit(1);
+  let lista=cols;
+  if(!r.error&&r.data&&r.data[0])lista=Object.keys(r.data[0]).filter(k=>k!=='foto');
+  r=await sb.from('jogadores').select(lista.join(',')).order('nome');
+  if(r.error)return null;
+  toast('⚠️ Jogadores carregados sem fotos (ligação lenta)');
+  return r.data||[];
+}
+function mostrarErroCarregamento(errs){
+  document.getElementById('erro-carregamento')?.remove();
+  const d=document.createElement('div');
+  d.id='erro-carregamento';
+  d.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:3000;background:#FEF2F2;border:1.5px solid #FCA5A5;color:#991B1B;border-radius:12px;padding:12px 14px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.15)';
+  d.innerHTML=`<div style="font-weight:700;margin-bottom:4px">⚠️ Não foi possível carregar todos os dados</div>
+    <div style="font-size:12px;margin-bottom:8px">Os dados <strong>não foram apagados</strong> — houve um erro na ligação à base de dados. Não cries jogadores novos agora; tenta recarregar.</div>
+    <div style="font-family:monospace;font-size:11px;background:#fff;border-radius:6px;padding:6px;margin-bottom:8px;word-break:break-word">${errs.map(e=>String(e).replace(/</g,'&lt;')).join('<br>')}</div>
+    <button class="btn btn-sm" onclick="location.reload()">🔄 Recarregar</button>
+    <button class="btn btn-sm" onclick="this.closest('#erro-carregamento').remove()">Fechar</button>`;
+  document.body.appendChild(d);
+}
+// Reduz fotos antes de guardar (máx. 400px, JPEG) para não pesar a base de dados
+function reduzirFoto(dataUrl,max=400,q=0.8){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const k=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      try{res(c.toDataURL('image/jpeg',q));}catch(e){res(dataUrl);}
+    };
+    img.onerror=()=>res(dataUrl);
+    img.src=dataUrl;
+  });
+}
 let _loadingData = false;
 async function loadAllData(){
   if(_loadingData) return;
@@ -1627,7 +1688,7 @@ async function loadAllData(){
   showLoading(true);
   try {
     const [jogsR, sessR, avalR, cfgR, jogosR, delegR, treinosR, metR, clinR, socR, fichasR, inscrR, mensR] = await Promise.all([
-      sb.from('jogadores').select('*').order('nome'),
+      carregarJogadoresSeguro(),
       sb.from('sessoes').select('*').order('data',{ascending:false}),
       sb.from('avaliacoes').select('*'),
       sb.from('config').select('*'),
@@ -1696,8 +1757,9 @@ async function loadAllData(){
     });
     // Re-renderizar lista de perfis no login com dados do Supabase
     renderLoginProfiles();
-    // Seed jogadores if empty
-    if(DB.jogadores.length===0) await seedJogadores();
+    // Erros de carregamento: avisar em vez de mostrar a app vazia (e NUNCA criar jogadores de exemplo)
+    const _errs=[['Jogadores',jogsR],['Sessões',sessR],['Jogos',jogosR],['Configuração',cfgR],['Avaliações',avalR],['Treinos',treinosR]].filter(([,r])=>r&&r.error).map(([n,r])=>n+': '+(r.error.message||r.error));
+    if(_errs.length){console.error('Erros ao carregar',_errs);mostrarErroCarregamento(_errs);}
     // Final dedup by nome (safety net)
     const seenNomes = new Set();
     DB.jogadores = DB.jogadores.filter(j => {
@@ -1707,7 +1769,7 @@ async function loadAllData(){
     });
     // Seed avaliacoes if empty
     if(DB.avaliacoes.length===0) await seedAvaliacoes();
-  } catch(e){ console.error(e); toast('Erro ao carregar dados'); }
+  } catch(e){ console.error(e); toast('Erro ao carregar dados'); mostrarErroCarregamento([e&&e.message?e.message:String(e)]); }
   showLoading(false);
   _loadingData = false;
 }
@@ -1715,7 +1777,7 @@ async function loadAllData(){
 async function seedJogadores(){
   // Double-check DB is truly empty before seeding to avoid duplicates
   const check = await sb.from('jogadores').select('id').limit(1);
-  if(check.data && check.data.length > 0) { console.log('Seed skipped - jogadores already exist'); return; }
+  if(check.error || !check.data || check.data.length > 0) { console.log('Seed skipped'); return; }
   const lista = [
     {id:uid(),nome:'José Silva',num:'10',sub:'Sub13',pos:'Médio',aval:4.2,nasc:'',cont:'',obs:''},
     {id:uid(),nome:'Gil Vilaça',num:'7',sub:'Sub15',pos:'Avançado',aval:4.5,nasc:'',cont:'',obs:''},
@@ -2261,10 +2323,11 @@ let editingFotoB64=null;
 function previewFoto(input){
   if(!input.files||!input.files[0])return;
   const reader=new FileReader();
-  reader.onload=e=>{
-    editingFotoB64=e.target.result;
+  reader.onload=async e=>{
+    const foto=await reduzirFoto(e.target.result);
+    editingFotoB64=foto;
     const prev=document.getElementById('jog-foto-preview');
-    prev.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+    prev.innerHTML=`<img src="${foto}" style="width:100%;height:100%;object-fit:cover">`;
     document.getElementById('jog-foto-clear').style.display='inline-block';
   };
   reader.readAsDataURL(input.files[0]);
