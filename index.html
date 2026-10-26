@@ -4515,6 +4515,7 @@ function renderHistoricoJogos(){
   if(!permitidos.length){el.innerHTML='';return;}
   // Escalões com jogos (agrupados pelos números, ex. "Sub9+Sub11" = "sub-9 e sub-11")
   const chaves=[];const nomeDe={};
+  gruposVisiveis().forEach(g=>{const k=_grupoChave(g);if(!chaves.includes(k)){chaves.push(k);nomeDe[k]=g;}});
   permitidos.forEach(j=>{const k=_grupoChave(j.grupo);if(!chaves.includes(k)){chaves.push(k);nomeDe[k]=(GRUPOS.find(g=>_grupoChave(g)===k))||j.grupo||'Sem escalão';}});
   chaves.sort((a,b)=>(parseInt(a)||999)-(parseInt(b)||999));
   let filtro=histState.grupo;
@@ -4522,7 +4523,7 @@ function renderHistoricoJogos(){
   if(filtro!=='__todos__'&&!chaves.includes(filtro))filtro='__todos__';
   const jogos=filtro==='__todos__'?permitidos:permitidos.filter(j=>_grupoChave(j.grupo)===filtro);
   const chip=(k,l,n)=>`<button class="btn btn-sm" style="border-radius:20px;${filtro===k?'background:var(--red);color:#fff;border-color:var(--red)':''}" onclick="setHistFiltro('${k}')">${l} <span style="opacity:.7">(${n})</span></button>`;
-  const filtrosHtml=chaves.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${chaves.map(k=>chip(k,nomeDe[k],permitidos.filter(j=>_grupoChave(j.grupo)===k).length)).join('')}${chip('__todos__','Todos',permitidos.length)}</div>`:'';
+  const filtrosHtml=chaves.length>=1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${chaves.map(k=>chip(k,nomeDe[k],permitidos.filter(j=>_grupoChave(j.grupo)===k).length)).join('')}${chaves.length>1?chip('__todos__','Todos',permitidos.length):''}</div>`:'';
   const visiveis=jogos.slice(0,histState.limite);
   const resto=jogos.length-visiveis.length;
   el.innerHTML=`<div class="card">
@@ -4531,6 +4532,7 @@ function renderHistoricoJogos(){
       <span style="font-size:12px;color:var(--gray-500)">${histState.aberto?'▲ Recolher':'▼ Mostrar'}</span>
     </div>
     ${histState.aberto?`${filtrosHtml}
+    ${visiveis.length?'':'<div style="font-size:12px;color:var(--gray-400);padding:6px 0">Ainda não há jogos guardados neste escalão.</div>'}
     ${visiveis.map(j=>{
       const ppF=j.power_plays?.favor?.lista||[];
       const ppC=j.power_plays?.contra?.lista||[];
