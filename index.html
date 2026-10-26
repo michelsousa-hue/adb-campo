@@ -4372,13 +4372,78 @@ function gerarPDFAnaliseJogos(){
       doc.setFontSize(11);doc.setFont('helvetica','bold');doc.setTextColor(...m[2]);doc.text(m[1],mx+mW/2,y+11.5,{align:'center'});});
     y+=21;
 
-    // ── Estatísticas individuais ──
+    // ── Estatísticas individuais (igual ao quadro da app: barras de tempo, totais, cartões) ──
     {
       const lst=_indSort(statsIndividuais(incl),ajState.ordem.ind);
       if(lst.length){
-        titulo('Estatísticas individuais',incl.length+' jogo(s) · tempo registado em directo · Jogos = jogou/convocado');
-        tabela([{lab:'Jogador',w:56},{lab:'Jogos',w:16,align:'r'},{lab:'Tempo total',w:24,align:'r'},{lab:'Média/jogo',w:22,align:'r'},{lab:'% tempo',w:16,align:'r'},{lab:'Golos',w:14,align:'r'},{lab:'Defesas',w:16,align:'r'},{lab:'Cartões A/Az/V',w:18,align:'r'}],
-          lst.map(o=>{const gr=_jogIsGR(o.id);return[_jogNome(o.id)+(gr?' (GR)':''),o.jogos+'/'+o.conv,{t:_fmtTempoTot(o.tempo).replace("''",'"'),bold:true},o.jogos?_fmtTempoTot(o.tempo/o.jogos).replace("''",'"'):'-',o.jogos&&o.possivel?Math.round(o.tempo/o.possivel*100)+'%':'-',{t:String(o.golos),bold:!!o.golos,cor:o.golos?RED:GRAY},{t:gr||o.defesas?String(o.defesas):'-',bold:!!o.defesas,cor:o.defesas?BLUE:GRAY},(o.am||o.az||o.vm)?o.am+'/'+o.az+'/'+o.vm:'-'];}));
+        titulo('Estatísticas individuais',incl.length+' jogo(s) · tempo registado em directo · Jogos = jogou / convocado');
+        const cols=[{k:'nome',lab:'Jogador',w:44,al:'l'},{k:'jogos',lab:'Jogos',w:13,al:'c'},{k:'tempo',lab:'Tempo total',w:46,al:'l'},{k:'media',lab:'Média/jogo',w:19,al:'c'},{k:'pct',lab:'% tempo',w:15,al:'c'},{k:'golos',lab:'Golos',w:13,al:'c'},{k:'defesas',lab:'Defesas',w:15,al:'c'},{k:'cartoes',lab:'Cartões',w:17,al:'c'}];
+        const xs=[];{let x=margin;cols.forEach(c=>{xs.push(x);x+=c.w;});}
+        const ord=ajState.ordem.ind;
+        const cabec=()=>{
+          doc.setFillColor(...LGRAY);doc.rect(margin,y-3.8,cW,6,'F');
+          doc.setFontSize(6.8);doc.setFont('helvetica','bold');
+          cols.forEach((c,i)=>{
+            doc.setTextColor(...(c.k===ord?RED:GRAY));
+            const t=c.lab.toUpperCase()+(c.k===ord?' v':'');
+            if(c.al==='c')doc.text(t,xs[i]+c.w/2,y,{align:'center'});else doc.text(t,xs[i]+2,y);
+          });
+          y+=6;
+        };
+        const fmt=t=>_fmtTempoTot(t).replace("''",'"');
+        const maxT=Math.max(1,...lst.map(o=>o.tempo));
+        const lh=7;
+        y+=1.5;cabec();
+        lst.forEach((o,ri)=>{
+          if(y+lh>280){novaPag();cabec();}
+          const gr=_jogIsGR(o.id);
+          if(ri%2===1){doc.setFillColor(250,250,251);doc.rect(margin,y-4.3,cW,lh,'F');}
+          doc.setDrawColor(235,235,238);doc.setLineWidth(0.2);doc.line(margin,y+2.7,margin+cW,y+2.7);
+          const c=(i,txt,cor,bold,size)=>{doc.setFontSize(size||8);doc.setFont('helvetica',bold?'bold':'normal');doc.setTextColor(...(cor||DARK));doc.text(String(txt),xs[i]+cols[i].w/2,y,{align:'center'});};
+          // Jogador
+          doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
+          const nome=doc.splitTextToSize(_jogNome(o.id),cols[0].w-(gr?10:3))[0];
+          doc.text(nome,xs[0]+2,y);
+          if(gr){const nw=doc.getTextWidth(nome);doc.setFontSize(6);doc.setTextColor(...BLUE);doc.text('GR',xs[0]+3.5+nw,y);}
+          // Jogos x/y
+          doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...DARK);
+          const jt=String(o.jogos);const jw=doc.getTextWidth(jt);
+          doc.setFontSize(6);const cw2=doc.getTextWidth('/'+o.conv);
+          const jx=xs[1]+cols[1].w/2-(jw+cw2)/2;
+          doc.setFontSize(8);doc.text(jt,jx,y);
+          doc.setFontSize(6);doc.setTextColor(...GRAY);doc.text('/'+o.conv,jx+jw,y);
+          // Tempo total: barra + valor
+          const bx=xs[2]+2,bw=cols[2].w-17,bh=2.6,by=y-2.3;
+          doc.setFillColor(...LGRAY);doc.roundedRect(bx,by,bw,bh,1,1,'F');
+          const fw=Math.max(0.8,bw*o.tempo/maxT);
+          doc.setFillColor(...(gr?BLUE:RED));doc.roundedRect(bx,by,fw,bh,1,1,'F');
+          doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...DARK);
+          doc.text(fmt(o.tempo),xs[2]+cols[2].w-1.5,y,{align:'right'});
+          // Média, %
+          c(3,o.jogos?fmt(o.tempo/o.jogos):'—',o.jogos?DARK:GRAY);
+          c(4,o.jogos&&o.possivel?Math.round(o.tempo/o.possivel*100)+'%':'—',o.jogos?DARK:GRAY);
+          // Golos / Defesas
+          c(5,o.golos,o.golos?RED:[200,200,205],!!o.golos);
+          c(6,gr||o.defesas?o.defesas:'—',o.defesas?BLUE:[200,200,205],!!o.defesas);
+          // Cartões: quadradinhos coloridos com o número
+          const cards=[[o.am,[234,179,8]],[o.az,[37,99,235]],[o.vm,[220,38,38]]].filter(k=>k[0]);
+          if(!cards.length)c(7,'—',[200,200,205]);
+          else{
+            doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+            const larg=cards.reduce((a,k)=>a+2.6+doc.getTextWidth(String(k[0]))+1.6,0)-1.6;
+            let cx=xs[7]+cols[7].w/2-larg/2;
+            cards.forEach(([n,cor])=>{doc.setFillColor(...cor);doc.roundedRect(cx,y-2.6,2.2,2.9,0.4,0.4,'F');cx+=2.6;doc.setTextColor(...DARK);doc.text(String(n),cx,y);cx+=doc.getTextWidth(String(n))+1.6;});
+          }
+          y+=lh;
+        });
+        // Total
+        const tg=lst.reduce((a,o)=>a+o.golos,0),td=lst.reduce((a,o)=>a+o.defesas,0);
+        if(y+lh>280){novaPag();}
+        doc.setDrawColor(210,210,215);doc.setLineWidth(0.5);doc.line(margin,y-4.3,margin+cW,y-4.3);
+        doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...DARK);doc.text('Total',xs[0]+2,y);
+        doc.setTextColor(...RED);doc.text(String(tg),xs[5]+cols[5].w/2,y,{align:'center'});
+        doc.setTextColor(...BLUE);doc.text(String(td),xs[6]+cols[6].w/2,y,{align:'center'});
+        y+=9;
       }
     }
     // ── Jogos incluídos ──
