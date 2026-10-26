@@ -1948,6 +1948,17 @@ function renderLoginProfiles(){
   html+=profileCard(null,null,true);
   list.innerHTML=html;
 }
+// Escalões a que o utilizador tem acesso (null = todos: admin, coordenação, mesa ou perfil com acesso total)
+function gruposPermitidos(){
+  const u=currentUser;
+  if(!u||u.key==='coord'||u.key==='mesa'||u.role==='coord'||!Array.isArray(u.grupos)||!u.grupos.length)return null;
+  return u.grupos;
+}
+// Compara escalões pelos números (ex.: "Sub9+Sub11" = "sub-9 e sub-11"), para não falhar se o nome do grupo mudou
+function _grupoChave(g){const n=String(g||'').match(/\d+/g);return n?n.map(Number).sort((a,b)=>a-b).join('-'):String(g||'').toLowerCase().trim();}
+function _grupoNaLista(g,lista){const k=_grupoChave(g);return lista.some(x=>x===g||_grupoChave(x)===k);}
+function jogoPermitido(j){const g=gruposPermitidos();return !g||_grupoNaLista(j.grupo,g);}
+function gruposVisiveis(){const g=gruposPermitidos();const l=g?GRUPOS.filter(x=>_grupoNaLista(x,g)):GRUPOS;return l.length?l:GRUPOS;}
 function setupForUser(){
   const isAdmin=currentUser.key==='coord';          // Admin fixo (key coord mantém-se internamente)
   const isMesa=currentUser.key==='mesa';
@@ -1981,11 +1992,17 @@ function setupForUser(){
   let defaultGrupo=GRUPOS[0]||'Sub9+Sub11';
   if(isTreinador&&currentUser.grupos&&currentUser.grupos.length>0){
     // Encontrar o grupo que contém os escalões do treinador
-    const grupoDoTreinador=GRUPOS.find(g=>currentUser.grupos.includes(g))||currentUser.grupos[0]||GRUPOS[0];
+    const grupoDoTreinador=GRUPOS.find(g=>_grupoNaLista(g,currentUser.grupos))||currentUser.grupos[0]||GRUPOS[0];
     defaultGrupo=grupoDoTreinador;
   }
   Object.keys(currentGrupo).forEach(k=>currentGrupo[k]=defaultGrupo);
   currentGrupoTreinos=defaultGrupo;
+  // Jogo em directo começa no escalão do treinador (se não houver jogo a decorrer)
+  if(!jogoState.parteIniciada&&!(jogoState.eventos||[]).length){
+    const gv=gruposVisiveis();
+    jogoState.grupo=gv.includes(defaultGrupo)?defaultGrupo:gv[0];
+    jogoState.convocados=[];
+  }
 }
 function doLoginMesa(){
   // PIN para Mesa de Jogo guardado na config
@@ -3430,7 +3447,7 @@ function renderJogoAoVivo(){
     _np.disabled=_dp.disabled=!!jogoState.parteIniciada;
   }
   const jbl=document.getElementById('jogo-gtabs-live');
-  jbl.innerHTML=GRUPOS.map(g=>`<div class="gtab ${jogoState.grupo===g?'active':''}" onclick="setJogoGrupo('${g}')">${g}</div>`).join('');
+  jbl.innerHTML=gruposVisiveis().map(g=>`<div class="gtab ${jogoState.grupo===g?'active':''}" onclick="setJogoGrupo('${g}')">${g}</div>`).join('');
   const _loc=document.getElementById('jogo-local');if(_loc)_loc.value=jogoState.local||'casa';
   atualizarPlacardLocal();
   updateClock();
@@ -4221,7 +4238,7 @@ function _ajNomes(ids,sep){return _titularesOrdenados(ids).map(id=>(_jogIsGR(id)
 async function renderAnaliseJogos(mudouGrupo,recarregar){
   const out=document.getElementById('aj-conteudo');if(!out)return;
   if(recarregar){out.innerHTML='<div class="empty-state"><div class="empty-state-text">A carregar jogos…</div></div>';await loadJogos();}
-  const todos=DB.jogos||[];
+  const todos=(DB.jogos||[]).filter(jogoPermitido);
   const sel=document.getElementById('aj-grupo');
   const grupos=[...new Set(todos.map(j=>j.grupo).filter(Boolean))];
   const atual=sel.value&&(sel.value==='__todos__'||grupos.includes(sel.value))?sel.value:(grupos[0]||'__todos__');
@@ -4286,7 +4303,7 @@ function gerarPDFAnaliseJogos(){
     const W=210,margin=14,cW=W-margin*2;
     const RED=[139,26,26],BLUE=[37,99,235],GREEN=[5,150,105],GRAY=[107,114,128],LGRAY=[243,244,246],WHITE=[255,255,255],DARK=[30,30,30];
     const sel=document.getElementById('aj-grupo');const grupo=sel?sel.value:'__todos__';
-    const doGrupo=(DB.jogos||[]).filter(j=>grupo==='__todos__'||j.grupo===grupo);
+    const doGrupo=(DB.jogos||[]).filter(jogoPermitido).filter(j=>grupo==='__todos__'||j.grupo===grupo);
     const incl=doGrupo.filter(j=>!ajState.excluidos[j.id]);
     const analisados=incl.filter(j=>reconstruirJogo(j).partesOk>0).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
     if(!analisados.length){toast('⚠️ Sem jogos para analisar');return;}
@@ -4491,7 +4508,7 @@ async function loadJogos(){
 }
 function renderHistoricoJogos(){
   const el=document.getElementById('historico-jogos-wrap');if(!el)return;
-  const jogos=DB.jogos||[];
+  const jogos=(DB.jogos||[]).filter(jogoPermitido);
   if(!jogos.length){el.innerHTML='';return;}
   el.innerHTML=`<div class="card">
     <div class="card-title">📋 Histórico de Jogos</div>
