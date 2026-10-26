@@ -4103,7 +4103,62 @@ async function guardarJogo(){
   renderHistoricoJogos();
 }
 // ═══ ANÁLISE DE JOGOS (combinações) ═══
-let ajState={excluidos:{},minTempo:2,ordem:{jog:'pm',cinco:'saldo',dupla:'saldo'},vistaComb:'dupla'};
+let ajState={excluidos:{},minTempo:2,ordem:{jog:'pm',cinco:'saldo',dupla:'saldo',ind:'tempo'},vistaComb:'dupla'};
+// ═══ Estatísticas individuais acumuladas (tempo real registado, golos, defesas, cartões) ═══
+function statsIndividuais(jogos){
+  const m={};
+  const g=id=>m[id]||(m[id]={id,jogos:0,conv:0,tempo:0,possivel:0,golos:0,defesas:0,am:0,az:0,vm:0});
+  jogos.forEach(j=>{
+    const tempos=j.tempos||{};
+    const durJogo=(j.num_partes||2)*(j.dur_parte||8)*60;
+    const ids=new Set([...Object.keys(tempos),...Object.keys(j.golos_jog||{}),...Object.keys(j.defesas_jog||{})]);
+    ids.forEach(id=>{
+      if(!DB.jogadores.find(x=>x.id===id))return;
+      const o=g(id);o.conv++;
+      const t=tempos[id]||0;
+      if(t>0){o.jogos++;o.tempo+=t;o.possivel+=durJogo;}
+      o.golos+=(j.golos_jog||{})[id]||0;
+      o.defesas+=(j.defesas_jog||{})[id]||0;
+    });
+    (j.eventos||[]).forEach(e=>{
+      if(!e.jid||!m[e.jid])return;
+      if(e.tipo==='amarelo')m[e.jid].am++;else if(e.tipo==='azul')m[e.jid].az++;else if(e.tipo==='vermelho')m[e.jid].vm++;
+    });
+  });
+  return Object.values(m);
+}
+function _indSort(list,k){
+  const f={tempo:o=>o.tempo,media:o=>o.jogos?o.tempo/o.jogos:0,pct:o=>o.possivel?o.tempo/o.possivel:0,jogos:o=>o.jogos,golos:o=>o.golos,defesas:o=>o.defesas,cartoes:o=>o.am+o.az*2+o.vm*3,nome:o=>0}[k]||(o=>o.tempo);
+  if(k==='nome')return list.sort((a,b)=>_jogNome(a.id).localeCompare(_jogNome(b.id)));
+  return list.sort((a,b)=>(f(b)-f(a))||(b.tempo-a.tempo));
+}
+function _fmtTempoTot(s){s=Math.round(s||0);const h=Math.floor(s/3600),mi=Math.floor((s%3600)/60),se=s%60;return h?h+'h'+String(mi).padStart(2,'0'):mi+"'"+String(se).padStart(2,'0')+"''";}
+function tabelaIndividualHTML(jogos){
+  const lista=_indSort(statsIndividuais(jogos),ajState.ordem.ind);
+  if(!lista.length)return'<div style="font-size:12px;color:var(--gray-400)">Sem dados de jogadores nos jogos escolhidos.</div>';
+  const maxT=Math.max(1,...lista.map(o=>o.tempo));
+  const th=(k,l,tip)=>_ajTh('ind',k,l,tip);
+  const rows=lista.map(o=>{
+    const gr=_jogIsGR(o.id);
+    const jg=DB.jogadores.find(x=>x.id===o.id);
+    const media=o.jogos?o.tempo/o.jogos:0;
+    const pct=o.possivel?Math.round(o.tempo/o.possivel*100):0;
+    const cart=[o.am?'🟨'+o.am:'',o.az?'🟦'+o.az:'',o.vm?'🟥'+o.vm:''].filter(Boolean).join(' ')||'<span style="color:var(--gray-300)">—</span>';
+    return`<tr>
+      <td style="white-space:nowrap">${gr?'🧤 ':''}<strong>${_jogNome(o.id)}</strong>${jg&&jg.num?` <span style="color:var(--gray-400);font-size:11px">#${jg.num}</span>`:''}</td>
+      <td style="text-align:center">${o.jogos}<span style="color:var(--gray-400);font-size:10px">/${o.conv}</span></td>
+      <td style="min-width:150px"><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;background:var(--gray-100);border-radius:4px;height:10px;overflow:hidden"><div style="width:${Math.round(o.tempo/maxT*100)}%;height:100%;background:${gr?'#2563EB':'var(--red)'}"></div></div><span style="font-family:var(--mono,monospace);font-size:12px;min-width:52px;text-align:right">${_fmtTempoTot(o.tempo)}</span></div></td>
+      <td style="text-align:center;font-size:12px">${o.jogos?_fmtTempoTot(media):'—'}</td>
+      <td style="text-align:center;font-size:12px">${o.jogos?pct+'%':'—'}</td>
+      <td style="text-align:center">${o.golos?`<strong style="color:var(--red)">${o.golos}</strong>`:'<span style="color:var(--gray-300)">0</span>'}</td>
+      <td style="text-align:center">${gr||o.defesas?`<strong style="color:#2563EB">${o.defesas}</strong>`:'<span style="color:var(--gray-300)">—</span>'}</td>
+      <td style="text-align:center;font-size:12px;white-space:nowrap">${cart}</td></tr>`;
+  }).join('');
+  const tot=lista.reduce((a,o)=>({golos:a.golos+o.golos,defesas:a.defesas+o.defesas}),{golos:0,defesas:0});
+  return`<div style="overflow-x:auto"><table class="tbl"><thead><tr>${th('nome','Jogador','Ordenar por nome')}${th('jogos','Jogos','Jogos em que jogou / convocado')}${th('tempo','Tempo total')}${th('media','Média/jogo','Tempo médio por jogo em que jogou')}${th('pct','% tempo','Percentagem do tempo dos jogos em que jogou')}${th('golos','⚽ Golos')}${th('defesas','🛡️ Defesas','Defesas (guarda-redes)')}${th('cartoes','Cartões')}</tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr style="font-weight:700;border-top:2px solid var(--gray-200)"><td>Total</td><td></td><td></td><td></td><td></td><td style="text-align:center;color:var(--red)">${tot.golos}</td><td style="text-align:center;color:#2563EB">${tot.defesas}</td><td></td></tr></tfoot></table></div>`;
+}
 // Reconstrói, para um jogo, os períodos com cada grupo em campo e os golos com quem estava em campo
 function reconstruirJogo(j){
   const eventos=(j.eventos||[]).map((e,i)=>({...e,_i:i})).sort((a,b)=>((a.ts||0)-(b.ts||0))||(a._i-b._i));
@@ -4206,6 +4261,9 @@ async function renderAnaliseJogos(mudouGrupo,recarregar){
       <div class="metric-card"><div class="metric-label">Golos sofridos</div><div class="metric-value" style="color:#DC2626">${gsTot}</div></div>
       <div class="metric-card"><div class="metric-label">Saldo</div><div class="metric-value">${_ajSaldo(gmTot-gsTot)}</div></div>
     </div>
+    <div class="card"><div class="card-title">📊 Estatísticas individuais — ${incl.length} jogo(s)</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">Tempo de jogo registado em directo, golos, defesas dos GR e cartões, somados em todos os jogos escolhidos em baixo. "Jogos" = jogos em que entrou / jogos em que foi convocado. Carrega nos títulos para ordenar.</div>
+      ${tabelaIndividualHTML(incl)}</div>
     <div class="card"><div class="card-title">👤 Jogadores — +/- em campo</div>
       <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">+1 por cada golo marcado e −1 por cada golo sofrido enquanto o jogador estava em campo. Carrega nos títulos das colunas para ordenar.</div>
       ${tabJog}</div>
@@ -4314,6 +4372,15 @@ function gerarPDFAnaliseJogos(){
       doc.setFontSize(11);doc.setFont('helvetica','bold');doc.setTextColor(...m[2]);doc.text(m[1],mx+mW/2,y+11.5,{align:'center'});});
     y+=21;
 
+    // ── Estatísticas individuais ──
+    {
+      const lst=_indSort(statsIndividuais(incl),ajState.ordem.ind);
+      if(lst.length){
+        titulo('Estatísticas individuais',incl.length+' jogo(s) · tempo registado em directo · Jogos = jogou/convocado');
+        tabela([{lab:'Jogador',w:56},{lab:'Jogos',w:16,align:'r'},{lab:'Tempo total',w:24,align:'r'},{lab:'Média/jogo',w:22,align:'r'},{lab:'% tempo',w:16,align:'r'},{lab:'Golos',w:14,align:'r'},{lab:'Defesas',w:16,align:'r'},{lab:'Cartões A/Az/V',w:18,align:'r'}],
+          lst.map(o=>{const gr=_jogIsGR(o.id);return[_jogNome(o.id)+(gr?' (GR)':''),o.jogos+'/'+o.conv,{t:_fmtTempoTot(o.tempo).replace("''",'"'),bold:true},o.jogos?_fmtTempoTot(o.tempo/o.jogos).replace("''",'"'):'-',o.jogos&&o.possivel?Math.round(o.tempo/o.possivel*100)+'%':'-',{t:String(o.golos),bold:!!o.golos,cor:o.golos?RED:GRAY},{t:gr||o.defesas?String(o.defesas):'-',bold:!!o.defesas,cor:o.defesas?BLUE:GRAY},(o.am||o.az||o.vm)?o.am+'/'+o.az+'/'+o.vm:'-'];}));
+      }
+    }
     // ── Jogos incluídos ──
     titulo('Jogos incluídos');
     tabela([{lab:'Adversário',w:90},{lab:'Data',w:30},{lab:'Escalão',w:42},{lab:'Resultado',w:20,align:'r'}],
