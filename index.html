@@ -4529,7 +4529,7 @@ function renderHistoricoJogos(){
           <button class="btn btn-sm" title="Editar eventos (golos, cartões, defesas, substituições)" onclick="editarEventosJogo('${j.id}')">⚽ Eventos</button>
           <button class="btn btn-sm" onclick="verJogo('${j.id}')">👁 Ver</button>
           <button class="btn btn-sm" style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE" onclick="gerarPDFJogoHistorico('${j.id}')">⬇ PDF</button>
-          <button class="btn btn-sm" style="color:#DC2626" onclick="apagarJogo('${j.id}')">×</button>
+          ${podeApagarJogos()?`<button class="btn btn-sm" style="color:#DC2626" onclick="apagarJogo('${j.id}')">×</button>`:''}
         </div>
       </div>`;
     }).join('')}
@@ -4907,7 +4907,9 @@ async function ejGuardar(){
   renderHistoricoJogos();
 }
 
+function podeApagarJogos(){return !!currentUser&&currentUser.key!=='mesa';}
 async function apagarJogo(id){
+  if(!podeApagarJogos()){toast('⛔ A Mesa de Jogo não pode apagar jogos');return;}
   if(!confirm('Apagar jogo?'))return;
   await sb.from('jogos').delete().eq('id',id);
   DB.jogos=(DB.jogos||[]).filter(x=>x.id!==id);
